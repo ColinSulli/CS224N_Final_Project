@@ -64,7 +64,7 @@ class BertSelfAttention(nn.Module):
     # Note that the attention mask distinguishes between non-padding tokens (with a value of 0)
     # and padding tokens (with a value of a large negative number).
 
-    att = S.masked_fill(attention_mask[:,:,:seq_len,:seq_len] == 0, float('-inf'))
+    att = S.masked_fill(attention_mask[:,:,:seq_len,:seq_len] < 0, float('-inf'))
 
     # Make sure to:
     # - Normalize the scores with softmax.
@@ -156,10 +156,7 @@ class BertLayer(nn.Module):
     self_attention = self.self_attention
 
     # run through self attention
-    key_layer = self_attention.transform(hidden_states, self_attention.key)
-    query_layer = self_attention.transform(hidden_states, self_attention.query)
-    value_layer = self_attention.transform(hidden_states, self_attention.value)
-    attn_value = self_attention.attention(key_layer, query_layer, value_layer, attention_mask)
+    attn_value = self_attention.forward(hidden_states, attention_mask)
 
     '''# 2. An add-norm operation that takes the input and output of the multi-head attention layer.'''
     norm_one = self.add_norm(hidden_states, attn_value, self.attention_dense, self.attention_dropout, self.attention_layer_norm)
