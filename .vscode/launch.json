@@ -10,6 +10,14 @@
             "request": "launch",
             "program": "optimizer_test.py",
             "console": "integratedTerminal"
-        }
+        },
+        {
+            "name": "classifier",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "classifier.py",
+            "console": "integratedTerminal",
+            "args": ["--fine-tune-mode", "last-linear-layer", "--lr", "1e-3"]
+        },
     ]
 }
