@@ -288,7 +288,6 @@ def train_multitask(args):
             sst_train_loss = train_sst(sst_batch, device, optimizer, model)
             sst_train_loss += sst_train_loss.item()
             sst_num_batches += 1
-            break
 
         para_train_loss = 0
         para_num_batches = 0
@@ -296,7 +295,6 @@ def train_multitask(args):
             para_train_loss = train_para(para_batch, device, optimizer, model)
             para_train_loss += para_train_loss.item()
             para_num_batches += 1
-            break
 
         sts_train_loss = 0
         sts_num_batches = 0
@@ -304,8 +302,9 @@ def train_multitask(args):
             sts_train_loss = train_sts(sts_batch, device, optimizer, model)
             sts_train_loss += sts_train_loss
             sts_num_batches += 1
-            break
 
+        sst_train_loss = sst_train_loss / sst_num_batches
+        para_train_loss = para_train_loss / para_num_batches
         sts_train_loss = sts_train_loss / sts_num_batches
 
         train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device)
