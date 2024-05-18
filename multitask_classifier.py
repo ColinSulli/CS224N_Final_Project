@@ -74,11 +74,12 @@ class MultitaskBERT(nn.Module):
         # You will want to add layers here to perform the downstream tasks.
         ### TODO
 
-        # predict_sentiment
-        self.classifier = nn.Linear(config.hidden_size, len(config.num_labels))
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        # SST
+        self.sst_classifier = nn.Linear(config.hidden_size, len(config.num_labels))
+        # Para
+        self.para_classifier = nn.Linear(config.hidden_size, 2)
 
-        self.sts_classifier = nn.Linear(config.hidden_size, 1)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
 
     def forward(self, input_ids, attention_mask):
@@ -105,7 +106,7 @@ class MultitaskBERT(nn.Module):
         # dropout and linear layer as in classifier.py.'''
         pooler_output = self.bert.forward(input_ids, attention_mask)['pooler_output']
         pooler_output = self.dropout(pooler_output)
-        logits = self.classifier(pooler_output)
+        logits = self.sst_classifier(pooler_output)
         return logits
 
 
@@ -125,7 +126,7 @@ class MultitaskBERT(nn.Module):
 
         pooler_output = self.bert.forward(input_cat, attention_mask_cat)['pooler_output']
         pooler_output = self.dropout(pooler_output)
-        logits = self.classifier(pooler_output)
+        logits = self.para_classifier(pooler_output)
 
         return logits
 
@@ -142,11 +143,6 @@ class MultitaskBERT(nn.Module):
         att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
         input_cos = F.cosine_similarity(att_1, att_2)
-        #output = self.dropout(input_cos)
-
-        #logits = self.sts_classifier(output)
-
-        #exit()
 
         return input_cos
 
