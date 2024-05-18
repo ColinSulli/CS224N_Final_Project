@@ -135,15 +135,13 @@ class MultitaskBERT(nn.Module):
         Note that your output should be unnormalized (a logit).
         '''
         ### TODO
-        # concatenate inputs and attention masks
-        input_cat = torch.cat((input_ids_1, input_ids_2), dim=1)
-        attention_mask_cat = torch.cat((attention_mask_1, attention_mask_2), dim=1)
+        # cosine similarity
+        att_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
+        att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
-        pooler_output = self.bert.forward(input_cat, attention_mask_cat)['pooler_output']
-        pooler_output = self.dropout(pooler_output)
-        logits = self.classifier(pooler_output)
+        input_cos = torch.tensordot(att_1, att_2) / (torch.norm(att_1) + torch.norm(att_2))
 
-        return logits
+        return input_cos
 
 def save_model(model, optimizer, args, config, filepath):
     save_info = {
@@ -162,7 +160,6 @@ def save_model(model, optimizer, args, config, filepath):
 def train_sst(batch, device, optimizer, model):
     b_ids, b_mask, b_labels = (batch['token_ids'],
                                batch['attention_mask'], batch['labels'])
-
     b_ids = b_ids.to(device)
     b_mask = b_mask.to(device)
     b_labels = b_labels.to(device)
@@ -178,22 +175,22 @@ def train_sst(batch, device, optimizer, model):
 
 def train_para(batch, device, optimizer, model):
     (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2,
-     token_type_ids_2, attention_mask_2, sent_ids) = \
+     token_type_ids_2, attention_mask_2, labels, sent_ids) = \
         (batch['token_ids_1'], batch['token_type_ids_1'], batch['attention_mask_1'], batch['token_ids_2'],
-         batch['token_type_ids_2'], batch['attention_mask_2'], batch['sent_ids'])
-
+         batch['token_type_ids_2'], batch['attention_mask_2'], batch['labels'], batch['sent_ids'])
     token_ids_1 = token_ids_1.to(device)
     token_type_ids_1 = token_type_ids_1.to(device) # need to modify bert embedding to use this later
     attention_mask_1 = attention_mask_1.to(device)
     token_ids_2 = token_ids_2.to(device)
     token_type_ids_2 = token_type_ids_2.to(device) # need to modify bert embedding to use this later
     attention_mask_2 = attention_mask_2.to(device)
-    sent_ids = torch.tensor(sent_ids) # convert list to torch
-    sent_ids = sent_ids.to(device)
+    labels = labels.to(device)
+    #sent_ids = torch.tensor(sent_ids) # convert list to torch
+    #sent_ids = sent_ids.to(device)
 
     optimizer.zero_grad()
     logits = model.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-    loss = F.cross_entropy(logits, sent_ids.view(-1), reduction='sum') / args.batch_size
+    loss = F.cross_entropy(logits, labels.view(-1), reduction='sum') / args.batch_size
 
     loss.backward()
     optimizer.step()
@@ -202,9 +199,9 @@ def train_para(batch, device, optimizer, model):
 
 def train_sts(batch, device, optimizer, model):
     (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2,
-     token_type_ids_2, attention_mask_2, sent_ids) = \
+     token_type_ids_2, attention_mask_2, labels, sent_ids) = \
         (batch['token_ids_1'], batch['token_type_ids_1'], batch['attention_mask_1'], batch['token_ids_2'],
-         batch['token_type_ids_2'], batch['attention_mask_2'], batch['sent_ids'])
+         batch['token_type_ids_2'], batch['attention_mask_2'], batch['labels'], batch['sent_ids'])
 
     token_ids_1 = token_ids_1.to(device)
     token_type_ids_1 = token_type_ids_1.to(device)  # need to modify bert embedding to use this later
@@ -212,17 +209,14 @@ def train_sts(batch, device, optimizer, model):
     token_ids_2 = token_ids_2.to(device)
     token_type_ids_2 = token_type_ids_2.to(device)  # need to modify bert embedding to use this later
     attention_mask_2 = attention_mask_2.to(device)
-    sent_ids = torch.tensor(sent_ids)  # convert list to torch
-    sent_ids = sent_ids.to(device)
+    labels = labels.to(device)
+    #sent_ids = torch.tensor(sent_ids)  # convert list to torch
+    #sent_ids = sent_ids.to(device)
 
     optimizer.zero_grad()
     logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-    loss = F.cross_entropy(logits, sent_ids.view(-1), reduction='sum') / args.batch_size
 
-    loss.backward()
-    optimizer.step()
-
-    return loss
+    return logits
 
 def train_multitask(args):
     '''Train MultitaskBERT.
@@ -246,16 +240,16 @@ def train_multitask(args):
                                     collate_fn=sst_dev_data.collate_fn)
 
     # Para Data
-    para_train_data = SentencePairTestDataset(para_train_data, args)
-    para_dev_data = SentencePairTestDataset(para_dev_data, args)
+    para_train_data = SentencePairDataset(para_train_data, args)
+    para_dev_data = SentencePairDataset(para_dev_data, args)
     para_train_dataloader = DataLoader(para_train_data, shuffle=True, batch_size=args.batch_size,
                                       collate_fn=para_train_data.collate_fn)
     para_dev_dataloader = DataLoader(para_dev_data, shuffle=False, batch_size=args.batch_size,
                                     collate_fn=para_dev_data.collate_fn)
 
     # STS Data
-    sts_train_data = SentencePairTestDataset(sts_train_data, args)
-    sts_dev_data = SentencePairTestDataset(sts_dev_data, args)
+    sts_train_data = SentencePairDataset(sts_train_data, args)
+    sts_dev_data = SentencePairDataset(sts_dev_data, args)
     sts_train_dataloader = DataLoader(sts_train_data, shuffle=True, batch_size=args.batch_size,
                                        collate_fn=sts_train_data.collate_fn)
     sts_dev_dataloader = DataLoader(sts_dev_data, shuffle=False, batch_size=args.batch_size,
@@ -282,21 +276,21 @@ def train_multitask(args):
         model.train()
         sst_train_loss = 0
         sst_num_batches = 0
-        for sst_batch in tqdm(sst_train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE):
+        for sst_batch in tqdm(sst_train_dataloader, desc=f'SST-train-{epoch}', disable=TQDM_DISABLE):
             sst_train_loss = train_sst(sst_batch, device, optimizer, model)
             sst_train_loss += sst_train_loss.item()
             sst_num_batches += 1
 
         para_train_loss = 0
         para_num_batches = 0
-        for para_batch in tqdm(para_train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE):
+        for para_batch in tqdm(para_train_dataloader, desc=f'Para-train-{epoch}', disable=TQDM_DISABLE):
             para_train_loss = train_para(para_batch, device, optimizer, model)
             para_train_loss += para_train_loss.item()
             para_num_batches += 1
 
         sts_train_loss = 0
         sts_num_batches = 0
-        for sts_batch in tqdm(sts_train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE):
+        for sts_batch in tqdm(sts_train_dataloader, desc=f'STS-train-{epoch}', disable=TQDM_DISABLE):
             sts_train_loss = train_sts(sts_batch, device, optimizer, model)
             sts_train_loss += sts_train_loss.item()
             sts_num_batches += 1
