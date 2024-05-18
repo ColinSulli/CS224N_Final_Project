@@ -49,8 +49,12 @@ class BertSentimentClassifier(torch.nn.Module):
 
         # Create any instance variables you need to classify the sentiment of BERT embeddings.
         ### TODO
-        raise NotImplementedError
+        # Lets make sure that the pooling layer has dimension equal to hidden size
+        assert (self.bert.state_dict()['pooler_dense.weight'].shape[0] == config.hidden_size)
 
+        # The weights are initialized using Kaiming uniform initialization by default.
+        self.classifier = torch.nn.Linear(config.hidden_size, config.num_labels)
+        self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, input_ids, attention_mask):
         '''Takes a batch of sentences and returns logits for sentiment classes'''
@@ -58,7 +62,13 @@ class BertSentimentClassifier(torch.nn.Module):
         # HINT: You should consider what is an appropriate return value given that
         # the training loop currently uses F.cross_entropy as the loss function.
         ### TODO
-        raise NotImplementedError
+        pooler_output = self.bert.forward(input_ids, attention_mask)['pooler_output']
+        pooler_output = self.dropout(pooler_output)
+        logits = self.classifier(pooler_output)
+
+        # according to hint, we are applying F.cross_entropy as the loss, so we don't need to
+        # apply softmax and just return the logits
+        return logits
 
 
 

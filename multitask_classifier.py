@@ -78,6 +78,8 @@ class MultitaskBERT(nn.Module):
         self.classifier = nn.Linear(config.hidden_size, len(config.num_labels))
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
+        self.sts_classifier = nn.Linear(config.hidden_size, 1)
+
 
     def forward(self, input_ids, attention_mask):
         'Takes a batch of sentences and produces embeddings for them.'
@@ -139,7 +141,12 @@ class MultitaskBERT(nn.Module):
         att_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
         att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
-        input_cos = torch.tensordot(att_1, att_2) / (torch.norm(att_1) + torch.norm(att_2))
+        input_cos = F.cosine_similarity(att_1, att_2)
+        #output = self.dropout(input_cos)
+
+        #logits = self.sts_classifier(output)
+
+        #exit()
 
         return input_cos
 
@@ -216,7 +223,12 @@ def train_sts(batch, device, optimizer, model):
     optimizer.zero_grad()
     logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
 
-    return logits
+    logits = logits.to(torch.float)
+    labels = labels.to(torch.float)
+
+    loss = F.cross_entropy(logits, labels.view(-1), reduction='sum') / args.batch_size
+
+    return loss
 
 def train_multitask(args):
     '''Train MultitaskBERT.
@@ -280,6 +292,7 @@ def train_multitask(args):
             sst_train_loss = train_sst(sst_batch, device, optimizer, model)
             sst_train_loss += sst_train_loss.item()
             sst_num_batches += 1
+            break
 
         para_train_loss = 0
         para_num_batches = 0
@@ -287,16 +300,16 @@ def train_multitask(args):
             para_train_loss = train_para(para_batch, device, optimizer, model)
             para_train_loss += para_train_loss.item()
             para_num_batches += 1
+            break
 
         sts_train_loss = 0
         sts_num_batches = 0
         for sts_batch in tqdm(sts_train_dataloader, desc=f'STS-train-{epoch}', disable=TQDM_DISABLE):
             sts_train_loss = train_sts(sts_batch, device, optimizer, model)
-            sts_train_loss += sts_train_loss.item()
+            sts_train_loss += sts_train_loss
             sts_num_batches += 1
+            break
 
-        sst_train_loss = sst_train_loss / sst_num_batches
-        para_train_loss = para_train_loss / para_num_batches
         sts_train_loss = sts_train_loss / sts_num_batches
 
         train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device)
