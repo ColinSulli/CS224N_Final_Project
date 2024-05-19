@@ -77,7 +77,7 @@ class MultitaskBERT(nn.Module):
         # SST
         self.sst_classifier = nn.Linear(config.hidden_size, len(config.num_labels))
         # Para
-        self.para_classifier = nn.Linear(config.hidden_size * 2, 2)
+        self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -193,7 +193,11 @@ def train_para(batch, device, optimizer, model):
 
     optimizer.zero_grad()
     logits = model.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-    loss = F.cross_entropy(logits, labels.view(-1), reduction='sum') / args.batch_size
+    labels = labels.to(torch.float)
+    logits = F.normalize(logits, dim=0)
+
+    #loss = F.cross_entropy(logits, labels.view(-1), reduction='sum') / args.batch_size
+    loss = nn.BCELoss()(logits.view(-1), labels.view(-1))
 
     loss.backward()
     optimizer.step()
@@ -281,7 +285,7 @@ def train_multitask(args):
 
     # Run for the specified number of epochs.
     #change from 1 to args.epochs
-    for epoch in range(args.epochs):
+    for epoch in range(1):
         model.train()
         sst_train_loss = 0
         sst_num_batches = 0
