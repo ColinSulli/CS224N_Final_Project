@@ -77,7 +77,7 @@ class MultitaskBERT(nn.Module):
         # SST
         self.sst_classifier = nn.Linear(config.hidden_size, len(config.num_labels))
         # Para
-        self.para_classifier = nn.Linear(config.hidden_size, 2)
+        self.para_classifier = nn.Linear(config.hidden_size * 2, 2)
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -281,7 +281,7 @@ def train_multitask(args):
 
     # Run for the specified number of epochs.
     #change from 1 to args.epochs
-    for epoch in range(1):
+    for epoch in range(args.epochs):
         model.train()
         sst_train_loss = 0
         sst_num_batches = 0
@@ -308,15 +308,15 @@ def train_multitask(args):
         para_train_loss = para_train_loss / para_num_batches
         sts_train_loss = sts_train_loss / sts_num_batches
 
-        train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device)
-        dev_acc, dev_f1, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device)
+    train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device)
+    dev_acc, dev_f1, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device)
 
-        if dev_acc > best_dev_acc:
-            best_dev_acc = dev_acc
-            save_model(model, optimizer, args, config, args.filepath)
+    if dev_acc > best_dev_acc:
+        best_dev_acc = dev_acc
+        save_model(model, optimizer, args, config, args.filepath)
 
-        print(
-            f"Epoch {epoch}: sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
+    print(
+        f"Epoch {epoch}: sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
 
 def test_multitask(args):
     '''Test and save predictions on the dev and test sets of all three tasks.'''
