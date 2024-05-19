@@ -78,6 +78,8 @@ class MultitaskBERT(nn.Module):
         self.sst_classifier = nn.Linear(config.hidden_size, len(config.num_labels))
         # Para
         self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
+        # SST
+        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -142,7 +144,14 @@ class MultitaskBERT(nn.Module):
         att_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
         att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
+        att_1 = self.sts_classifier(att_1)
+        att_2 = self.sts_classifier(att_2)
+
         input_cos = F.cosine_similarity(att_1, att_2)
+
+        input_cos[:] += 1
+        input_cos[:] *= 2.5
+        print(input_cos)
 
         return input_cos
 
@@ -160,73 +169,56 @@ def save_model(model, optimizer, args, config, filepath):
     torch.save(save_info, filepath)
     print(f"save the model to {filepath}")
 
-def train_sst(batch, device, optimizer, model):
-    b_ids, b_mask, b_labels = (batch['token_ids'],
-                               batch['attention_mask'], batch['labels'])
-    b_ids = b_ids.to(device)
-    b_mask = b_mask.to(device)
-    b_labels = b_labels.to(device)
+def train(batch, device, optimizer, model, type):
+    loss = None
 
-    optimizer.zero_grad()
-    logits = model.predict_sentiment(b_ids, b_mask)
-    loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
+    if type == 'sst':
+        b_ids, b_mask, b_labels = (batch['token_ids'],
+                                   batch['attention_mask'], batch['labels'])
+        b_ids = b_ids.to(device)
+        b_mask = b_mask.to(device)
+        b_labels = b_labels.to(device)
 
-    loss.backward()
-    optimizer.step()
+        optimizer.zero_grad()
+        logits = model.predict_sentiment(b_ids, b_mask)
+        loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
+        loss.backward()
+        optimizer.step()
 
-    return loss
+    elif type == 'para' or type == 'sts':
+        (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2,
+         token_type_ids_2, attention_mask_2, b_labels, sent_ids) = \
+            (batch['token_ids_1'], batch['token_type_ids_1'], batch['attention_mask_1'], batch['token_ids_2'],
+             batch['token_type_ids_2'], batch['attention_mask_2'], batch['labels'], batch['sent_ids'])
 
-def train_para(batch, device, optimizer, model):
-    (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2,
-     token_type_ids_2, attention_mask_2, labels, sent_ids) = \
-        (batch['token_ids_1'], batch['token_type_ids_1'], batch['attention_mask_1'], batch['token_ids_2'],
-         batch['token_type_ids_2'], batch['attention_mask_2'], batch['labels'], batch['sent_ids'])
-    token_ids_1 = token_ids_1.to(device)
-    token_type_ids_1 = token_type_ids_1.to(device) # need to modify bert embedding to use this later
-    attention_mask_1 = attention_mask_1.to(device)
-    token_ids_2 = token_ids_2.to(device)
-    token_type_ids_2 = token_type_ids_2.to(device) # need to modify bert embedding to use this later
-    attention_mask_2 = attention_mask_2.to(device)
-    labels = labels.to(device)
-    #sent_ids = torch.tensor(sent_ids) # convert list to torch
-    #sent_ids = sent_ids.to(device)
+        token_ids_1 = token_ids_1.to(device)
+        token_type_ids_1 = token_type_ids_1.to(device)  # need to modify bert embedding to use this later
+        attention_mask_1 = attention_mask_1.to(device)
+        token_ids_2 = token_ids_2.to(device)
+        token_type_ids_2 = token_type_ids_2.to(device)  # need to modify bert embedding to use this later
+        attention_mask_2 = attention_mask_2.to(device)
+        b_labels = b_labels.to(device)
+        # sent_ids = torch.tensor(sent_ids) # convert list to torch
+        # sent_ids = sent_ids.to(device)
 
-    optimizer.zero_grad()
-    logits = model.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-    labels = labels.to(torch.float)
-    logits = F.normalize(logits, dim=0)
+        if type == 'para':
+            optimizer.zero_grad()
 
-    #loss = F.cross_entropy(logits, labels.view(-1), reduction='sum') / args.batch_size
-    loss = nn.BCELoss()(logits.view(-1), labels.view(-1))
+            logits = model.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+            logits = F.normalize(logits, dim=0)
+            logits[logits < 0] = 0
 
-    loss.backward()
-    optimizer.step()
+            loss = nn.BCELoss()(logits.view(-1), b_labels.to(torch.float).view(-1))
+        elif type == 'sts':
+            optimizer.zero_grad()
 
-    return loss
+            logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+            logits = logits.to(torch.float)
 
-def train_sts(batch, device, optimizer, model):
-    (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2,
-     token_type_ids_2, attention_mask_2, labels, sent_ids) = \
-        (batch['token_ids_1'], batch['token_type_ids_1'], batch['attention_mask_1'], batch['token_ids_2'],
-         batch['token_type_ids_2'], batch['attention_mask_2'], batch['labels'], batch['sent_ids'])
+            loss = F.cross_entropy(logits, b_labels.to(torch.float).view(-1), reduction='sum') / args.batch_size
 
-    token_ids_1 = token_ids_1.to(device)
-    token_type_ids_1 = token_type_ids_1.to(device)  # need to modify bert embedding to use this later
-    attention_mask_1 = attention_mask_1.to(device)
-    token_ids_2 = token_ids_2.to(device)
-    token_type_ids_2 = token_type_ids_2.to(device)  # need to modify bert embedding to use this later
-    attention_mask_2 = attention_mask_2.to(device)
-    labels = labels.to(device)
-    #sent_ids = torch.tensor(sent_ids)  # convert list to torch
-    #sent_ids = sent_ids.to(device)
-
-    optimizer.zero_grad()
-    logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-
-    logits = logits.to(torch.float)
-    labels = labels.to(torch.float)
-
-    loss = F.cross_entropy(logits, labels.view(-1), reduction='sum') / args.batch_size
+        loss.backward()
+        optimizer.step()
 
     return loss
 
@@ -284,36 +276,34 @@ def train_multitask(args):
     best_dev_acc = 0
 
     # Run for the specified number of epochs.
-    #change from 1 to args.epochs
-    for epoch in range(1):
+    for epoch in range(args.epochs):
         model.train()
-        sst_train_loss = 0
-        sst_num_batches = 0
-        for sst_batch in tqdm(sst_train_dataloader, desc=f'SST-train-{epoch}', disable=TQDM_DISABLE):
-            sst_train_loss = train_sst(sst_batch, device, optimizer, model)
-            sst_train_loss += sst_train_loss.item()
-            sst_num_batches += 1
 
-        para_train_loss = 0
-        para_num_batches = 0
-        for para_batch in tqdm(para_train_dataloader, desc=f'Para-train-{epoch}', disable=TQDM_DISABLE):
-            para_train_loss = train_para(para_batch, device, optimizer, model)
-            para_train_loss += para_train_loss.item()
-            para_num_batches += 1
+        sst_train_loss, sst_num_batches, para_train_loss, para_num_batches, sts_train_loss, sts_num_batches = 0, 0, 0, 0, 0, 0
 
-        sts_train_loss = 0
-        sts_num_batches = 0
-        for sts_batch in tqdm(sts_train_dataloader, desc=f'STS-train-{epoch}', disable=TQDM_DISABLE):
-            sts_train_loss = train_sts(sts_batch, device, optimizer, model)
-            sts_train_loss += sts_train_loss
-            sts_num_batches += 1
+        if args.train =='sst' or args.train == 'all':
+            for sst_batch in tqdm(sst_train_dataloader, desc=f'SST-train-{epoch}', disable=TQDM_DISABLE):
+                sst_train_loss = train(sst_batch, device, optimizer, model, 'sst')
+                sst_train_loss += sst_train_loss.item()
+                sst_num_batches += 1
+                sst_train_loss = sst_train_loss / sst_num_batches
 
-        sst_train_loss = sst_train_loss / sst_num_batches
-        para_train_loss = para_train_loss / para_num_batches
-        sts_train_loss = sts_train_loss / sts_num_batches
+        if args.train == 'para' or args.train == 'all':
+            for para_batch in tqdm(para_train_dataloader, desc=f'Para-train-{epoch}', disable=TQDM_DISABLE):
+                para_train_loss = train(para_batch, device, optimizer, model, 'para')
+                para_train_loss += para_train_loss.item()
+                para_num_batches += 1
+                para_train_loss = para_train_loss / para_num_batches
 
-    train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device)
-    dev_acc, dev_f1, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device)
+        if args.train == 'para' or args.train == 'all':
+            for sts_batch in tqdm(sts_train_dataloader, desc=f'STS-train-{epoch}', disable=TQDM_DISABLE):
+                sts_train_loss = train(sts_batch, device, optimizer, model, 'sts')
+                sts_train_loss += sts_train_loss
+                sts_num_batches += 1
+                sts_train_loss = sts_train_loss / sts_num_batches
+
+    train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device, args.train)
+    dev_acc, dev_f1, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device, args.train)
 
     if dev_acc > best_dev_acc:
         best_dev_acc = dev_acc
@@ -368,7 +358,7 @@ def test_multitask(args):
             dev_paraphrase_accuracy, dev_para_y_pred, dev_para_sent_ids, \
             dev_sts_corr, dev_sts_y_pred, dev_sts_sent_ids = model_eval_multitask(sst_dev_dataloader,
                                                                     para_dev_dataloader,
-                                                                    sts_dev_dataloader, model, device)
+                                                                    sts_dev_dataloader, model, device, args.train)
 
         test_sst_y_pred, \
             test_sst_sent_ids, test_para_y_pred, test_para_sent_ids, test_sts_y_pred, test_sts_sent_ids = \
@@ -443,6 +433,7 @@ def get_args():
     parser.add_argument("--batch_size", help='sst: 64, cfimdb: 8 can fit a 12GB GPU', type=int, default=8)
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.3)
     parser.add_argument("--lr", type=float, help="learning rate", default=1e-5)
+    parser.add_argument("--train", type=str, help="sst, para, sts, or all", default="all")
 
     args = parser.parse_args()
     return args
