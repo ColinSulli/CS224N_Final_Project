@@ -121,12 +121,12 @@ class MultitaskBERT(nn.Module):
         ### TODO
 
         # concatenate inputs and attention masks
-        input_cat = torch.cat((input_ids_1, input_ids_2), dim=1)
-        attention_mask_cat = torch.cat((attention_mask_1, attention_mask_2), dim=1)
+        output_1 = self.bert.forward(input_ids_1, attention_mask_1)['pooler_output']
+        output_2 = self.bert.forward(input_ids_2, attention_mask_2)['pooler_output']
+        output_cat = torch.cat((output_1, output_2), dim=1)
 
-        pooler_output = self.bert.forward(input_cat, attention_mask_cat)['pooler_output']
-        pooler_output = self.dropout(pooler_output)
-        logits = self.para_classifier(pooler_output)
+        output = self.dropout(output_cat)
+        logits = self.para_classifier(output)
 
         return logits
 
@@ -280,7 +280,8 @@ def train_multitask(args):
     best_dev_acc = 0
 
     # Run for the specified number of epochs.
-    for epoch in range(args.epochs):
+    #change from 1 to args.epochs
+    for epoch in range(1):
         model.train()
         sst_train_loss = 0
         sst_num_batches = 0
