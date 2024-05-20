@@ -11,9 +11,12 @@ from tokenizer import BertTokenizer
 from bert import BertModel
 from optimizer import AdamW
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
+
+from utils import p_print
 
 
-TQDM_DISABLE=False
+TQDM_DISABLE=True
 
 
 # Fix the random seed.
@@ -61,6 +64,8 @@ class BertSentimentClassifier(torch.nn.Module):
         # The final BERT contextualized embedding is the hidden state of [CLS] token (the first token).
         # HINT: You should consider what is an appropriate return value given that
         # the training loop currently uses F.cross_entropy as the loss function.
+
+        # bert.forward gives us the pooler_output which is the hidden state of the [CLS] token
         pooler_output = self.bert.forward(input_ids, attention_mask)['pooler_output']
         pooler_output = self.dropout(pooler_output)
         logits = self.classifier(pooler_output)
@@ -161,7 +166,7 @@ def load_data(filename, flag='train'):
                 if label not in num_labels:
                     num_labels[label] = len(num_labels)
                 data.append((sent, label,sent_id))
-        print(f"load {len(data)} data from {filename}")
+        p_print(f"load {len(data)} data from {filename}")
 
     if flag == 'train':
         return data, len(num_labels)
@@ -235,11 +240,14 @@ def save_model(model, optimizer, args, config, filepath):
     }
 
     torch.save(save_info, filepath)
-    print(f"save the model to {filepath}")
+    p_print(f"save the model to {filepath}")
 
 
 def train(args):
+    summary_writer = SummaryWriter(f'runs/train-{args.fine_tune_mode}-{args.filepath.split(".pt")[0]}')
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
+
+    p_print('using device', device)
     # Create the data and its corresponding datasets and dataloader.
     train_data, num_labels = load_data(args.train, 'train')
     dev_data = load_data(args.dev, 'valid')
@@ -273,7 +281,7 @@ def train(args):
         model.train()
         train_loss = 0
         num_batches = 0
-        for batch in tqdm(train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE):
+        for step, batch in enumerate(tqdm(train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE)):
             b_ids, b_mask, b_labels = (batch['token_ids'],
                                        batch['attention_mask'], batch['labels'])
 
@@ -291,16 +299,25 @@ def train(args):
             train_loss += loss.item()
             num_batches += 1
 
+            if step % 10 == 0:
+                summary_writer.add_scalar('train_loss', loss.item(), epoch * len(train_dataloader) + step)
+
         train_loss = train_loss / (num_batches)
 
-        train_acc, train_f1, *_  = model_eval(train_dataloader, model, device)
-        dev_acc, dev_f1, *_ = model_eval(dev_dataloader, model, device)
+        with torch.no_grad():
+            train_acc, train_f1, *_  = model_eval(train_dataloader, model, device)
+            dev_acc, dev_f1, *_ = model_eval(dev_dataloader, model, device)
+            summary_writer.add_scalar('train_acc', train_acc, epoch)
+            summary_writer.add_scalar('train_f1', train_f1, epoch)
+            summary_writer.add_scalar('dev_acc', dev_acc, epoch)
+            summary_writer.add_scalar('dev_f1', dev_f1, epoch)
 
         if dev_acc > best_dev_acc:
+            p_print("Found new best model! old best: %.3f, new best: %.3f" % (best_dev_acc, dev_acc))
             best_dev_acc = dev_acc
             save_model(model, optimizer, args, config, args.filepath)
 
-        print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
+        p_print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
 
 
 def test(args):
@@ -311,7 +328,7 @@ def test(args):
         model = BertSentimentClassifier(config)
         model.load_state_dict(saved['model'])
         model = model.to(device)
-        print(f"load model from {args.filepath}")
+        p_print(f"load model from {args.filepath}")
         
         dev_data = load_data(args.dev, 'valid')
         dev_dataset = SentimentDataset(dev_data, args)
@@ -322,11 +339,11 @@ def test(args):
         test_dataloader = DataLoader(test_dataset, shuffle=False, batch_size=args.batch_size, collate_fn=test_dataset.collate_fn)
         
         dev_acc, dev_f1, dev_pred, dev_true, dev_sents, dev_sent_ids = model_eval(dev_dataloader, model, device)
-        print('DONE DEV')
+        p_print('DONE DEV')
         test_pred, test_sents, test_sent_ids = model_test_eval(test_dataloader, model, device)
-        print('DONE Test')
+        p_print('DONE Test')
         with open(args.dev_out, "w+") as f:
-            print(f"dev acc :: {dev_acc :.3f}")
+            p_print(f"dev acc :: {dev_acc :.3f}")
             f.write(f"id \t Predicted_Sentiment \n")
             for p, s in zip(dev_sent_ids,dev_pred ):
                 f.write(f"{p} , {s} \n")
@@ -359,13 +376,13 @@ if __name__ == "__main__":
     args = get_args()
     seed_everything(args.seed)
 
-    print('Training Sentiment Classifier on SST...')
+    p_print('Training Sentiment Classifier on SST...')
     config = SimpleNamespace(
         filepath='sst-classifier.pt',
         lr=args.lr,
         use_gpu=args.use_gpu,
         epochs=args.epochs,
-        batch_size=args.batch_size,
+        batch_size=64,
         hidden_dropout_prob=args.hidden_dropout_prob,
         train='data/ids-sst-train.csv',
         dev='data/ids-sst-dev.csv',
@@ -377,10 +394,10 @@ if __name__ == "__main__":
 
     train(config)
 
-    print('Evaluating on SST...')
+    p_print('Evaluating on SST...')
     test(config)
 
-    print('Training Sentiment Classifier on cfimdb...')
+    p_print('Training Sentiment Classifier on cfimdb...')
     config = SimpleNamespace(
         filepath='cfimdb-classifier.pt',
         lr=args.lr,
@@ -398,5 +415,5 @@ if __name__ == "__main__":
 
     train(config)
 
-    print('Evaluating on cfimdb...')
+    p_print('Evaluating on cfimdb...')
     test(config)

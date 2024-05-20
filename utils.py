@@ -345,3 +345,9 @@ def get_extended_attention_mask(attention_mask: Tensor, dtype) -> Tensor:
   extended_attention_mask = extended_attention_mask.to(dtype=dtype)  # fp16 compatibility
   extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
   return extended_attention_mask
+
+
+def p_print(*args):
+    print(" ".join(map(str, args)))
+    with open('logs/log.txt', 'a') as f:
+        print(" ".join(map(str, args)), file=f, flush=True)
