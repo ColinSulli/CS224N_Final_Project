@@ -151,7 +151,7 @@ class MultitaskBERT(nn.Module):
 
         input_cos[:] += 1
         input_cos[:] *= 2.5
-        print(input_cos)
+        #print(input_cos)
 
         return input_cos
 
@@ -295,7 +295,7 @@ def train_multitask(args):
                 para_num_batches += 1
                 para_train_loss = para_train_loss / para_num_batches
 
-        if args.train == 'para' or args.train == 'all':
+        if args.train == 'sts' or args.train == 'all':
             for sts_batch in tqdm(sts_train_dataloader, desc=f'STS-train-{epoch}', disable=TQDM_DISABLE):
                 sts_train_loss = train(sts_batch, device, optimizer, model, 'sts')
                 sts_train_loss += sts_train_loss
