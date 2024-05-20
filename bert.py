@@ -51,9 +51,7 @@ class BertSelfAttention(nn.Module):
     # - Before returning, concatenate multi-heads to recover the original shape:
     #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
 
-    ### TODO
-
-    # Attention scores are calculated by multiplying the key and query to obtain
+        # Attention scores are calculated by multiplying the key and query to obtain
     # a score matrix S of size [bs, num_attention_heads, seq_len, seq_len].
     # S[*, i, j, k] represents the (unnormalized) attention score between the j-th and k-th
     # token, given by i-th attention head.
@@ -72,17 +70,9 @@ class BertSelfAttention(nn.Module):
     # - Before returning, concatenate multi-heads to recover the original shape:
     #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
     att = F.softmax(att, dim=-1)
-
-    # apply dropout to normalised attention scores
-    att = self.dropout(att)
-
     att = att @ value
     att = att.transpose(1,2)
-
-    #y = y.transpose(1, 2).contiguous().view(B, Tq, Cq)
     att = att.contiguous().view(bs, seq_len, self.num_attention_heads * self.attention_head_size)
-
-    #att = att.reshape(bs, seq_len, self.num_attention_heads * self.attention_head_size)
 
     return att
 
@@ -127,7 +117,7 @@ class BertLayer(nn.Module):
     input: the input of the previous layer
     output: the output of the previous layer
     dense_layer: used to transform the output
-    dropout: the dropout to be applied 
+    dropout: the dropout to be applied
     ln_layer: the layer norm to be applied
     """
     # Hint: Remember that BERT applies dropout to the transformed output of each sub-layer,
@@ -173,7 +163,7 @@ class BertLayer(nn.Module):
 class BertModel(BertPreTrainedModel):
   """
   The BERT model returns the final embeddings for each token in a sentence.
-  
+
   The model consists of:
   1. Embedding layers (used in self.embed).
   2. A stack of n BERT layers (used in self.encode).
