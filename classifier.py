@@ -40,7 +40,7 @@ class BertSentimentClassifier(torch.nn.Module):
     def __init__(self, config):
         super(BertSentimentClassifier, self).__init__()
         self.num_labels = config.num_labels
-        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.bert = BertModel.from_pretrained('bert-base-uncased', use_rotary_embed=config.use_rotary_embed)
 
         # Pretrain mode does not require updating BERT paramters.
         assert config.fine_tune_mode in ["last-linear-layer", "full-model"]
@@ -244,7 +244,7 @@ def save_model(model, optimizer, args, config, filepath):
 
 
 def train(args):
-    summary_writer = SummaryWriter(f'runs/train-{args.fine_tune_mode}-{args.filepath.split(".pt")[0]}')
+    summary_writer = SummaryWriter(f'runs/train-rope-{args.fine_tune_mode}-{args.filepath.split(".pt")[0]}')
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
 
     p_print('using device', device)
@@ -265,7 +265,8 @@ def train(args):
               'num_labels': num_labels,
               'hidden_size': 768,
               'data_dir': '.',
-              'fine_tune_mode': args.fine_tune_mode}
+              'fine_tune_mode': args.fine_tune_mode,
+              'use_rotary_embed': args.use_rotary_embed}
 
     config = SimpleNamespace(**config)
 
@@ -367,6 +368,7 @@ def get_args():
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.3)
     parser.add_argument("--lr", type=float, help="learning rate, default lr for 'pretrain': 1e-3, 'finetune': 1e-5",
                         default=1e-3)
+    parser.add_argument("--use_rotary_embed", action='store_true')
 
     args = parser.parse_args()
     return args
@@ -389,7 +391,8 @@ if __name__ == "__main__":
         test='data/ids-sst-test-student.csv',
         fine_tune_mode=args.fine_tune_mode,
         dev_out = 'predictions/' + args.fine_tune_mode + '-sst-dev-out.csv',
-        test_out = 'predictions/' + args.fine_tune_mode + '-sst-test-out.csv'
+        test_out = 'predictions/' + args.fine_tune_mode + '-sst-test-out.csv',
+        use_rotary_embed=args.use_rotary_embed
     )
 
     train(config)
@@ -410,7 +413,8 @@ if __name__ == "__main__":
         test='data/ids-cfimdb-test-student.csv',
         fine_tune_mode=args.fine_tune_mode,
         dev_out = 'predictions/' + args.fine_tune_mode + '-cfimdb-dev-out.csv',
-        test_out = 'predictions/' + args.fine_tune_mode + '-cfimdb-test-out.csv'
+        test_out = 'predictions/' + args.fine_tune_mode + '-cfimdb-test-out.csv',
+        use_rotary_embed=args.use_rotary_embed
     )
 
     train(config)

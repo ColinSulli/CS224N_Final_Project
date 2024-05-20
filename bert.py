@@ -201,11 +201,14 @@ class BertModel(BertPreTrainedModel):
     
     # changes for rotary embedding
     self.use_rotary_embed = config.use_rotary_embed
-    if not self.use_rotary_embed:
-      self.pos_embedding = nn.Embedding(config.max_position_embeddings, config.hidden_size)
-      # Register position_ids (1, len position emb) to buffer because it is a constant.
-      position_ids = torch.arange(config.max_position_embeddings).unsqueeze(0)
-      self.register_buffer('position_ids', position_ids)
+    p_print('using rope:', self.use_rotary_embed)
+    
+    
+    # ToDo: Check if when using rope, pos_embedding should not get gradient updates
+    self.pos_embedding = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+    # Register position_ids (1, len position emb) to buffer because it is a constant.
+    position_ids = torch.arange(config.max_position_embeddings).unsqueeze(0)
+    self.register_buffer('position_ids', position_ids)
 
 
     self.init_weights()
