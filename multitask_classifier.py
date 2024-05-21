@@ -263,8 +263,7 @@ def train(batch, device, optimizer, model, type, scaler):
 
         with autocast():
             # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
-            logits = model.train_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2, b_labels)
-            loss = nn.MSELoss(reduction='mean')(logits, b_labels)
+            loss = model.train_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2, b_labels)
 
     # Run backprop for the loss from the task
     scaler.scale(loss).backward()
