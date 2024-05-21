@@ -201,7 +201,7 @@ def train(batch, device, optimizer, model, type, scaler):
 
         optimizer.zero_grad()
         with autocast():
-            logits = model.predict_sentiment(b_ids, b_mask)
+            logits = model.module.predict_sentiment(b_ids, b_mask)
             
             # logits dim: B, class_size. b_labels dim: B, (class indices)
             loss = nn.CrossEntropyLoss(reduction='mean')(logits, b_labels)
@@ -222,7 +222,7 @@ def train(batch, device, optimizer, model, type, scaler):
         b_labels = b_labels.to(device, dtype=torch.float32)
 
         with autocast():
-            logits = model.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+            logits = model.module.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
             # logits dim: B, b_labels dim: B
             loss = nn.BCEWithLogitsLoss(reduction='mean')(logits, b_labels)
     
@@ -243,7 +243,7 @@ def train(batch, device, optimizer, model, type, scaler):
 
         with autocast():
             # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
-            logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+            logits = model.module.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
             loss = nn.MSELoss(reduction='mean')(logits, b_labels)
 
     # Run backprop for the loss from the task
@@ -317,6 +317,7 @@ def train_multitask(args):
     config = SimpleNamespace(**config)
 
     model = MultitaskBERT(config)
+    model = nn.DataParallel(model)
     model = model.to(device)
 
     lr = args.lr
