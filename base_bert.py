@@ -7,7 +7,7 @@ from utils import *
 class BertPreTrainedModel(nn.Module):
   config_class = BertConfig
   base_model_prefix = "bert"
-  _keys_to_ignore_on_load_missing = [r"position_ids"]
+  _keys_to_ignore_on_load_missing = [r"position_ids", r"pos_embeddings"]
   _keys_to_ignore_on_load_unexpected = None
 
   def __init__(self, config: PretrainedConfig, *inputs, **kwargs):
@@ -48,6 +48,7 @@ class BertPreTrainedModel(nn.Module):
     use_auth_token = kwargs.pop("use_auth_token", None)
     revision = kwargs.pop("revision", None)
     mirror = kwargs.pop("mirror", None)
+    use_rotary_embed = kwargs.pop("use_rotary_embed", False)
 
     # Load config if we don't provide a configuration
     if not isinstance(config, PretrainedConfig):
@@ -63,6 +64,7 @@ class BertPreTrainedModel(nn.Module):
         local_files_only=local_files_only,
         use_auth_token=use_auth_token,
         revision=revision,
+        use_rotary_embed=use_rotary_embed,
         **kwargs,
       )
     else:

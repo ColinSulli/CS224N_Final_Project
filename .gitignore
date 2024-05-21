@@ -1,0 +1,6 @@
+# pyc files
+*.pyc
+abhishek_experiments.ipynb
+runs/
+__pycache__/
+logs/

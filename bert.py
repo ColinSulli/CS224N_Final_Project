@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from base_bert import BertPreTrainedModel
+from rope import apply_rotary_emb, precompute_rotary_emb
 from utils import *
 
 
@@ -23,6 +24,12 @@ class BertSelfAttention(nn.Module):
     # implementation of transformer. Although it is a bit unusual, we empirically
     # observe that it yields better performance.
     self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
+    
+    self.use_rotary_embed = config.use_rotary_embed
+    if self.use_rotary_embed:
+      rope_cache = precompute_rotary_emb(config.hidden_size // config.num_attention_heads, config.max_position_embeddings)
+      self.register_buffer("rope_cache", rope_cache)
+    
 
   def transform(self, x, linear_layer):
     # The corresponding linear_layer of k, v, q are used to project the hidden_state (x).
@@ -91,6 +98,12 @@ class BertSelfAttention(nn.Module):
     key_layer = self.transform(hidden_states, self.key)
     value_layer = self.transform(hidden_states, self.value)
     query_layer = self.transform(hidden_states, self.query)
+
+    # Apply rotary embeddings if applicable
+    if self.use_rotary_embed:
+      key_layer = apply_rotary_emb(key_layer, self.rope_cache)
+      query_layer = apply_rotary_emb(query_layer, self.rope_cache)
+
     # Calculate the multi-head attention.
     attn_value = self.attention(key_layer, query_layer, value_layer, attention_mask)
     return attn_value
@@ -177,13 +190,9 @@ class BertModel(BertPreTrainedModel):
 
     # Embedding layers.
     self.word_embedding = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
-    self.pos_embedding = nn.Embedding(config.max_position_embeddings, config.hidden_size)
     self.tk_type_embedding = nn.Embedding(config.type_vocab_size, config.hidden_size)
     self.embed_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
     self.embed_dropout = nn.Dropout(config.hidden_dropout_prob)
-    # Register position_ids (1, len position emb) to buffer because it is a constant.
-    position_ids = torch.arange(config.max_position_embeddings).unsqueeze(0)
-    self.register_buffer('position_ids', position_ids)
 
     # BERT encoder.
     self.bert_layers = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
@@ -191,6 +200,18 @@ class BertModel(BertPreTrainedModel):
     # [CLS] token transformations.
     self.pooler_dense = nn.Linear(config.hidden_size, config.hidden_size)
     self.pooler_af = nn.Tanh()
+    
+    # changes for rotary embedding
+    self.use_rotary_embed = config.use_rotary_embed
+    p_print('using rope:', self.use_rotary_embed)
+    
+    
+    # ToDo: Check if when using rope, pos_embedding should not get gradient updates
+    self.pos_embedding = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+    # Register position_ids (1, len position emb) to buffer because it is a constant.
+    position_ids = torch.arange(config.max_position_embeddings).unsqueeze(0)
+    self.register_buffer('position_ids', position_ids)
+
 
     self.init_weights()
 
@@ -198,16 +219,8 @@ class BertModel(BertPreTrainedModel):
     input_shape = input_ids.size()
     seq_length = input_shape[1]
 
-    # Get word embedding from self.word_embedding into input_embeds.
-    inputs_embeds = None
     ### TODO
-    inputs_embeds = self.word_embedding(input_ids)
-
-    # Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
-    pos_ids = self.position_ids[:, :seq_length]
-    pos_embeds = None
-    ### TODO
-    pos_embeds = self.pos_embedding(pos_ids)
+    inputs_embeds = self.word_embedding(input_ids)    
 
     # Get token type ids. Since we are not considering token type, this embedding is
     # just a placeholder.
@@ -216,7 +229,13 @@ class BertModel(BertPreTrainedModel):
 
     # Add three embeddings together; then apply embed_layer_norm and dropout and return.
     ### TODO
-    sum_embeds = inputs_embeds + pos_embeds + tk_type_embeds
+    sum_embeds = inputs_embeds + tk_type_embeds
+    if not self.use_rotary_embed:
+      # Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
+      pos_ids = self.position_ids[:, :seq_length]
+      pos_embeds = self.pos_embedding(pos_ids)
+      sum_embeds = sum_embeds + pos_embeds
+    
     sum_embeds = self.embed_layer_norm(sum_embeds)
     sum_embeds = self.embed_dropout(sum_embeds)
 
