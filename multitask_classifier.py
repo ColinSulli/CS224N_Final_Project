@@ -33,9 +33,10 @@ from datasets import (
 )
 
 from evaluation import model_eval_sst, model_eval_multitask, model_eval_test_multitask
+from utils import p_print
 
 
-TQDM_DISABLE=False
+TQDM_DISABLE=True
 
 
 # Fix the random seed.
@@ -74,11 +75,20 @@ class MultitaskBERT(nn.Module):
         # You will want to add layers here to perform the downstream tasks.
         ### TODO
 
-        # SST
-        self.sst_classifier = nn.Linear(config.hidden_size, len(config.num_labels))
-        # Para
+        # SST: 5 class classification
+        # negative, somewhat negative, neutral, somewhat positive, or positive.
+
+        # according to documentaiton of SST, there are 5 labels
+        assert(len(config.sentiment_labels) == 5)
+        self.sst_classifier = nn.Linear(config.hidden_size, len(config.sentiment_labels))
+        
+        # Paraphrasing: Binary classification
+        # we are concatenating the embeddings of the two sentences 
+        # and then passing them through a linear layer.
         self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
-        # SST
+        
+        # SST: 6 class classification The similarity scores vary from 0 to 5
+        # with 0 being the least similar and 5 being the most similar.
         self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -95,7 +105,6 @@ class MultitaskBERT(nn.Module):
         # for now just returning bert embedding
         return self.bert.forward(input_ids, attention_mask)
 
-
     def predict_sentiment(self, input_ids, attention_mask):
         '''Given a batch of sentences, outputs logits for classifying sentiment.
         There are 5 sentiment classes:
@@ -110,8 +119,6 @@ class MultitaskBERT(nn.Module):
         pooler_output = self.dropout(pooler_output)
         logits = self.sst_classifier(pooler_output)
         return logits
-
-
 
     def predict_paraphrase(self,
                            input_ids_1, attention_mask_1,
@@ -181,7 +188,7 @@ def train(batch, device, optimizer, model, type):
 
         optimizer.zero_grad()
         logits = model.predict_sentiment(b_ids, b_mask)
-        loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
+        loss = F.cross_entropy(logits, b_labels.view(-1), reduction='mean')
         loss.backward()
         optimizer.step()
 
@@ -198,9 +205,6 @@ def train(batch, device, optimizer, model, type):
         token_type_ids_2 = token_type_ids_2.to(device)  # need to modify bert embedding to use this later
         attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.to(device)
-        # sent_ids = torch.tensor(sent_ids) # convert list to torch
-        # sent_ids = sent_ids.to(device)
-
         if type == 'para':
             optimizer.zero_grad()
 
@@ -231,9 +235,11 @@ def train_multitask(args):
     in datasets.py to load in examples from the Quora and SemEval datasets.
     '''
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
+    p_print('using device', device)
+    
     # Create the data and its corresponding datasets and dataloader.
-    sst_train_data, num_labels,para_train_data, sts_train_data = load_multitask_data(args.sst_train,args.para_train,args.sts_train, split ='train')
-    sst_dev_data, num_labels,para_dev_data, sts_dev_data = load_multitask_data(args.sst_dev,args.para_dev,args.sts_dev, split ='train')
+    sst_train_data, sentiment_labels, para_train_data, sts_train_data = load_multitask_data(args.sst_train, args.para_train, args.sts_train, split ='train')
+    sst_dev_data, sentiment_labels, para_dev_data, sts_dev_data = load_multitask_data(args.sst_dev, args.para_dev, args.sts_dev, split ='train')
 
     # SST Data
     sst_train_data = SentenceClassificationDataset(sst_train_data, args)
@@ -261,7 +267,7 @@ def train_multitask(args):
 
     # Init model.
     config = {'hidden_dropout_prob': args.hidden_dropout_prob,
-              'num_labels': num_labels,
+              'sentiment_labels': sentiment_labels,
               'hidden_size': 768,
               'data_dir': '.',
               'fine_tune_mode': args.fine_tune_mode}
@@ -302,8 +308,9 @@ def train_multitask(args):
                 sts_num_batches += 1
                 sts_train_loss = sts_train_loss / sts_num_batches
 
-    train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device, args.train)
-    dev_acc, dev_f1, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device, args.train)
+    with torch.no_grad():
+        train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device, args.train)
+        dev_acc, dev_f1, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device, args.train)
 
     if dev_acc > best_dev_acc:
         best_dev_acc = dev_acc
