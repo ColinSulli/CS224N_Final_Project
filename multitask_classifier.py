@@ -12,6 +12,7 @@ Running `python multitask_classifier.py` trains and tests your MultitaskBERT and
 writes all required submission files.
 '''
 
+import itertools
 import random, numpy as np, argparse
 from types import SimpleNamespace
 
@@ -217,7 +218,6 @@ def train(batch, device, optimizer, model, type):
         attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.to(device, dtype=torch.float32)
 
-        optimizer.zero_grad()
         logits = model.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
         
         # logits dim: (B, 1) b_labels dim: B
@@ -232,8 +232,7 @@ def train(batch, device, optimizer, model, type):
     #     loss = F.cross_entropy(logits, b_labels.to(torch.float).view(-1), reduction='sum') / args.batch_size
 
     # Run backprop for the loss.
-    loss.backward()
-    optimizer.step()
+    loss.backward()    
 
     return loss
 
@@ -248,7 +247,7 @@ def train_multitask(args):
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
     p_print('using device', device)
 
-    summary_writer = SummaryWriter(f'runs/train-multitask-overfit-all_batch_per_epoch')
+    summary_writer = SummaryWriter(f'runs/train-multitask-overfit-one_batch_per_loader_per_epoch')
     
     # Create the data and its corresponding datasets and dataloader.
     sst_train_data, sentiment_labels, para_train_data, sts_train_data = load_multitask_data(args.sst_train, args.para_train, args.sts_train, split ='train')
@@ -301,31 +300,35 @@ def train_multitask(args):
     optimizer = AdamW(model.parameters(), lr=lr)
     best_dev_acc = 0
 
+    cycle_para_loader = itertools.cycle(para_train_dataloader)
+
     # Run for the specified number of epochs.
     for epoch in range(args.epochs):
         model.train()
 
         sst_train_loss, sst_num_batches, para_train_loss, para_num_batches, sts_train_loss, sts_num_batches = 0, 0, 0, 0, 0, 0
 
-        if args.train =='sst' or args.train == 'all':
-            for step, sst_batch in enumerate(tqdm(sst_train_dataloader, desc=f'SST-train-{epoch}', disable=TQDM_DISABLE)):
-                training_loss = train(sst_batch, device, optimizer, model, 'sst')
-                sst_train_loss += training_loss.item()
-                sst_num_batches += 1
-                sst_train_loss = sst_train_loss / sst_num_batches
+        for step, sst_batch in enumerate(sst_train_dataloader):
+            para_batch = next(cycle_para_loader)
 
-                if step % 10 == 0:
-                    summary_writer.add_scalar('sst_train_loss', training_loss.item(), epoch * len(sst_train_dataloader) + step)
+            optimizer.zero_grad()
+            
+            sst_training_loss = train(sst_batch, device, optimizer, model, 'sst')
+            sst_train_loss += sst_training_loss.item()
+            sst_num_batches += 1
+            sst_train_loss = sst_train_loss / sst_num_batches
 
-        if args.train == 'para' or args.train == 'all':
-            for step, para_batch in enumerate(tqdm(para_train_dataloader, desc=f'Para-train-{epoch}', disable=TQDM_DISABLE)):
-                training_loss = train(para_batch, device, optimizer, model, 'para')
-                para_train_loss += training_loss.item()
-                para_num_batches += 1
-                para_train_loss = para_train_loss / para_num_batches
+        
+            para_training_loss = train(para_batch, device, optimizer, model, 'para')
+            para_train_loss += para_training_loss.item()
+            para_num_batches += 1
+            para_train_loss = para_train_loss / para_num_batches
 
-                if step % 10 == 0:
-                    summary_writer.add_scalar('para_train_loss', training_loss.item(), epoch * len(sst_train_dataloader) + step)
+            optimizer.step()
+
+            if step % 10 == 0:
+                summary_writer.add_scalar('sst_train_loss', sst_training_loss.item(), epoch * len(sst_train_dataloader) + step)
+                summary_writer.add_scalar('para_train_loss', para_training_loss.item(), epoch * len(sst_train_dataloader) + step)
 
 
         # if args.train == 'sts' or args.train == 'all':
