@@ -17,6 +17,7 @@ import random, numpy as np, argparse
 from types import SimpleNamespace
 
 import torch
+from torch.cuda.amp import autocast, GradScaler
 from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -188,7 +189,7 @@ def save_model(model, optimizer, args, config, filepath):
     torch.save(save_info, filepath)
     p_print(f"save the model to {filepath}")
 
-def train(batch, device, optimizer, model, type):
+def train(batch, device, optimizer, model, type, scaler):
     loss = None
 
     if type == 'sst':
@@ -199,10 +200,11 @@ def train(batch, device, optimizer, model, type):
         b_labels = b_labels.to(device)
 
         optimizer.zero_grad()
-        logits = model.predict_sentiment(b_ids, b_mask)
-        
-        # logits dim: B, class_size. b_labels dim: B, (class indices)
-        loss = nn.CrossEntropyLoss(reduction='mean')(logits, b_labels)
+        with autocast():
+            logits = model.predict_sentiment(b_ids, b_mask)
+            
+            # logits dim: B, class_size. b_labels dim: B, (class indices)
+            loss = nn.CrossEntropyLoss(reduction='mean')(logits, b_labels)
 
     elif type == 'para':
         (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2,
@@ -219,10 +221,10 @@ def train(batch, device, optimizer, model, type):
         attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.to(device, dtype=torch.float32)
 
-        logits = model.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-        
-        # logits dim: B, b_labels dim: B
-        loss = nn.BCEWithLogitsLoss(reduction='mean')(logits, b_labels)
+        with autocast():
+            logits = model.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+            # logits dim: B, b_labels dim: B
+            loss = nn.BCEWithLogitsLoss(reduction='mean')(logits, b_labels)
     
     elif type == 'sts':
         (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2,
@@ -239,12 +241,13 @@ def train(batch, device, optimizer, model, type):
         attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.to(device, dtype=torch.float32)
 
-        # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
-        logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-        loss = nn.MSELoss(reduction='mean')(logits, b_labels)
+        with autocast():
+            # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
+            logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+            loss = nn.MSELoss(reduction='mean')(logits, b_labels)
 
     # Run backprop for the loss from the task
-    loss.backward()
+    scaler.scale(loss).backward()
 
     return loss
 
@@ -260,6 +263,7 @@ def train_multitask(args):
     p_print('using device', device)
 
     summary_writer = SummaryWriter(f'runs/train-multitask-cycle-loader')
+    scaler = GradScaler()
     
     # Create the data and its corresponding datasets and dataloader.
     sst_train_data, sentiment_labels, para_train_data, sts_train_data = load_multitask_data(args.sst_train, args.para_train, args.sts_train, split ='train')
@@ -277,7 +281,7 @@ def train_multitask(args):
     # sts data, with 15 times batch size, we should have covered all the 
     # para data in every 3rd epoch
     train_batch_size_sts_and_sst = 4
-    train_batch_size_para = 64
+    train_batch_size_para = 32
     
     # SST Data
     sst_train_data = SentenceClassificationDataset(sst_train_data, args)
@@ -317,7 +321,9 @@ def train_multitask(args):
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr)
-    best_dev_acc = [0, 0, 0]
+    best_sst_dev = 0
+    best_para_dev = 0
+    best_sts_corr = 0
 
     cycle_sst_loader = itertools.cycle(sst_train_dataloader)
     cycle_para_loader = itertools.cycle(para_train_dataloader)
@@ -335,23 +341,24 @@ def train_multitask(args):
             optimizer.zero_grad()
             
             # STS symantic textual simiarity training
-            sts_training_loss = train(sts_batch, device, optimizer, model, 'sts')
+            sts_training_loss = train(sts_batch, device, optimizer, model, 'sts', scaler)
             sts_train_loss += sts_training_loss.item()
             sts_num_batches += 1
             
             # paraphrase training
-            para_training_loss = train(para_batch, device, optimizer, model, 'para')
+            para_training_loss = train(para_batch, device, optimizer, model, 'para', scaler)
             para_train_loss += para_training_loss.item()
             para_num_batches += 1
 
             # SST sentiment training
-            sst_training_loss = train(sst_batch, device, optimizer, model, 'sst')
+            sst_training_loss = train(sst_batch, device, optimizer, model, 'sst', scaler)
             sst_train_loss += sst_training_loss.item()
             sst_num_batches += 1
 
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
 
-            if step % 10 == 0:
+            if step % 100 == 0:
                 overall_steps = epoch * len(sts_train_dataloader) + step
                 summary_writer.add_scalar('sts_train_loss', sts_training_loss.item(), overall_steps)
                 summary_writer.add_scalar('sst_train_loss', sst_training_loss.item(), overall_steps)
@@ -374,9 +381,15 @@ def train_multitask(args):
         summary_writer.add_scalar('sts_dev_corr', sts_dev_corr, epoch)
 
         # save new mode if at least one of the dev accuracy is better
-        if sum([sst_dev_acc, para_dev_acc, sts_dev_corr] > best_dev_acc) >= 1:
-            p_print(f"Saving model at epoch {epoch}, previous dev accuracies: {best_dev_acc}, new dev accuracies: {sst_dev_acc, para_dev_acc, sts_dev_corr}")
+        if sst_dev_acc > best_sst_dev or para_dev_acc > best_para_dev or sts_dev_corr > best_sts_corr:
+            p_print(f"Saving model at epoch {epoch}, previous dev accuracies: {best_sst_dev, best_para_dev, best_sts_corr}, new dev accuracies: {sst_dev_acc, para_dev_acc, sts_dev_corr}")
             save_model(model, optimizer, args, config, args.filepath)
+            if sst_dev_acc > best_sst_dev:
+                best_sst_dev = sst_dev_acc
+            if para_dev_acc > best_para_dev:
+                best_para_dev = para_dev_acc
+            if sts_dev_corr > best_sts_corr:
+                best_sts_corr = sts_dev_corr
 
         sts_train_loss = sts_train_loss / sts_num_batches
         para_train_loss = para_train_loss / para_num_batches
