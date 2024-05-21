@@ -78,8 +78,8 @@ class MultitaskBERT(nn.Module):
         self.sst_classifier = nn.Linear(config.hidden_size, len(config.num_labels))
         # Para
         self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
-        # SST
-        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
+        # STS
+        self.sts_classifier = nn.Linear(config.hidden_size * 2, 1)
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -132,6 +132,20 @@ class MultitaskBERT(nn.Module):
 
         return logits
 
+    def train_similarity(self,
+                         input_ids_1, attention_mask_1,
+                         input_ids_2, attention_mask_2, b_labels):
+        att_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
+        att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
+
+        output_cat = torch.cat((att_1, att_2), dim=1)
+        output_cat = self.dropout(output_cat)
+        sim_output = self.para_classifier(output_cat)
+
+        loss = torch.nn.CosineEmbeddingLoss(reduction='sum')(sim_output, output_cat, b_labels.to(torch.float).view(-1)) / args.batch_size
+
+        return loss
+
 
     def predict_similarity(self,
                            input_ids_1, attention_mask_1,
@@ -141,17 +155,17 @@ class MultitaskBERT(nn.Module):
         '''
         ### TODO
         # cosine similarity
-        att_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
-        att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
+        att_1 = self.bert.forward(input_ids_1, attention_mask_1)['pooler_output']
+        att_2 = self.bert.forward(input_ids_2, attention_mask_2)['pooler_output']
+        output_cat = torch.cat((output_1, output_2), dim=1)
 
-        att_1 = self.sts_classifier(att_1)
-        att_2 = self.sts_classifier(att_2)
+        output_cat = self.dropout(output_cat)
+        sim_output = self.para_classifier(output_cat)
 
-        input_cos = F.cosine_similarity(att_1, att_2)
-
+        input_cos = F.cosine_similarity(sim_output, output_cat, dim=1)
         input_cos[:] += 1
         input_cos[:] *= 2.5
-        #print(input_cos)
+        input_cos = torch.round(input_cos)
 
         return input_cos
 
@@ -211,11 +225,7 @@ def train(batch, device, optimizer, model, type):
             loss = nn.BCELoss()(logits.view(-1), b_labels.to(torch.float).view(-1))
         elif type == 'sts':
             optimizer.zero_grad()
-
-            logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-            logits = logits.to(torch.float)
-
-            loss = F.cross_entropy(logits, b_labels.to(torch.float).view(-1), reduction='sum') / args.batch_size
+            loss = model.train_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2, b_labels)
 
         loss.backward()
         optimizer.step()
