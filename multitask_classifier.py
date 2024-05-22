@@ -164,10 +164,13 @@ class MultitaskBERT(nn.Module):
         att_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
         att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
-        score = self.predict_similarity(input_ids_1, attention_mask_1, input_ids_2, attention_mask_2)
+        return
+        #score = self.predict_similarity(input_ids_1, attention_mask_1, input_ids_2, attention_mask_2)
         output_cat = torch.cat((att_1, att_2), dim=1)
         output_cat = self.dropout(output_cat)
         output_cat = self.sts_classifier(output_cat)
+        score = torch.sigmoid(output_cat) * 2 - 1
+        b_labels = torch.sigmoid(b_labels) * 2 - 1
         #output_cat = 5 * torch.sigmoid(output_cat)
         
         #print("OUTPUT_CAT ", output_cat)
@@ -186,8 +189,21 @@ class MultitaskBERT(nn.Module):
         '''
 
         ### TODO
+
+        # concatenate inputs and attention masks
+        output_1 = self.bert.forward(input_ids_1, attention_mask_1)['pooler_output']
+        output_2 = self.bert.forward(input_ids_2, attention_mask_2)['pooler_output']
+
+        # dimension
+        output_cat = torch.cat((output_1, output_2), dim=1)
+        output = self.dropout(output_cat)
+        logits = self.sts_classifier(output).squeeze()
+
+        logits = 5 * torch.sigmoid(logits)
+        return logits
+
         # cosine similarity
-        att_1 = self.bert.forward(input_ids_1, attention_mask_1)['pooler_output']
+        '''att_1 = self.bert.forward(input_ids_1, attention_mask_1)['pooler_output']
         att_2 = self.bert.forward(input_ids_2, attention_mask_2)['pooler_output']
         output_cat = torch.cat((att_1, att_2), dim=1)
 
@@ -198,7 +214,7 @@ class MultitaskBERT(nn.Module):
         input_cos = 5 * torch.sigmoid(output_cat)
         #input_cos = torch.round(input_cos)
 
-        return input_cos
+        return input_cos'''
 
 def save_model(model, optimizer, args, config, filepath):
     save_info = {
@@ -269,7 +285,8 @@ def train(batch, device, optimizer, model, type, scaler):
 
         with autocast():
             # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
-            loss = model.train_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2, b_labels)
+            logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+            loss = nn.MSELoss(reduction='mean')(logits, b_labels)
 
     # Run backprop for the loss from the task
     scaler.scale(loss).backward()
