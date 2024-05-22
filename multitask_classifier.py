@@ -114,7 +114,7 @@ class MultitaskBERT(nn.Module):
         # SST: 6 class classification The similarity scores vary from 0 to 5
         # with 0 being the least similar and 5 being the most similar.
         self.sts_classifier = nn.Sequential(
-            nn.Linear(config.hidden_size * 2, 512),
+            nn.Linear(config.hidden_size, 512),
             nn.ELU(alpha=0.1),
             nn.Dropout(config.hidden_dropout_prob),
             nn.Linear(512, 1)
@@ -175,15 +175,16 @@ class MultitaskBERT(nn.Module):
         output_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
         # dimension
-        output_cat = torch.cat((output_1, output_2), dim=1)
-        output = self.dropout(output_cat)
-        logits = self.sts_classifier(output).squeeze()
+        #output_cat = torch.cat((output_1, output_2), dim=1)
+        #output = self.dropout(output_cat)
+        logits_1 = self.sts_classifier(output_1).squeeze()
+        logits_2 = self.sts_classifier(output_2).squeeze()
 
         # scale it between 0 and 5 so that we can calculate MSE
-        logits = 5 * torch.sigmoid(logits)
+        logits = 5 * torch.sigmoid(F.cosine_similarity(output_1, output_2))
 
-        loss = torch.nn.CosineEmbeddingLoss()(output, logits, b_labels)
-        return loss
+        #loss = torch.nn.CosineEmbeddingLoss()(output, logits, b_labels)
+        return logits
 
 
     def predict_similarity(self,
@@ -195,13 +196,18 @@ class MultitaskBERT(nn.Module):
         output_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
         output_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
+        logits_1 = self.sts_classifier(output_1).squeeze()
+        logits_2 = self.sts_classifier(output_2).squeeze()
+
+        logits = 5 * torch.sigmoid(F.cosine_similarity(output_1, output_2))
+
         # dimension
-        output_cat = torch.cat((output_1, output_2), dim=1)
-        output = self.dropout(output_cat)
-        logits = self.sts_classifier(output).squeeze()
+        #output_cat = torch.cat((output_1, output_2), dim=1)
+        #output = self.dropout(output_cat)
+        #logits = self.sts_classifier(output).squeeze()
 
         # scale it between 0 and 5 so that we can calculate MSE
-        logits = 5 * torch.sigmoid(logits)
+        #logits = 5 * torch.sigmoid(logits)
 
         return logits
 
@@ -268,7 +274,7 @@ def train(batch, rank, model, type):
         b_labels = b_labels.type(torch.float32).cuda(rank)
 
         # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
-        logits = model.module.train_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2, b_labels)
+        logits = model.module.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
         loss = nn.MSELoss(reduction='mean')(logits, b_labels)
 
     # Run backprop for the loss from the task
