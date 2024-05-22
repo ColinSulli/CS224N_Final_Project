@@ -170,9 +170,9 @@ class MultitaskBERT(nn.Module):
         output_cat = self.sts_classifier(output_cat)
         #output_cat = 5 * torch.sigmoid(output_cat)
         
-        print("OUTPUT_CAT ", output_cat)
-        print("SCORE ", score)
-        print("LABELS ", b_labels)
+        #print("OUTPUT_CAT ", output_cat)
+        #print("SCORE ", score)
+        #print("LABELS ", b_labels)
 
         loss = torch.nn.CosineEmbeddingLoss(reduction='mean')(output_cat, score, b_labels.to(torch.float).view(-1))
 
