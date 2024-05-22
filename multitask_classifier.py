@@ -268,7 +268,7 @@ def train(batch, rank, model, type):
         b_labels = b_labels.type(torch.float32).cuda(rank)
 
         # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
-        logits = model.module.train_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+        logits = model.module.train_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2, b_labels)
         loss = nn.MSELoss(reduction='mean')(logits, b_labels)
 
     # Run backprop for the loss from the task
