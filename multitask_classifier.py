@@ -273,8 +273,8 @@ def train_multitask(args):
     # batch size for para data. Since para data size is almost 46 times
     # sts data, with 15 times batch size, we should have covered all the 
     # para data in every 3rd epoch
-    train_batch_size_sts_and_sst = 8
-    train_batch_size_para = 64
+    train_batch_size_sts_and_sst = 4
+    train_batch_size_para = 32
     
     # SST Data
     sst_train_data = SentenceClassificationDataset(sst_train_data, args)
