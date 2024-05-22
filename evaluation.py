@@ -50,7 +50,7 @@ def model_eval_sst(dataloader, model, device):
 def model_eval_multitask(sentiment_dataloader,
                          paraphrase_dataloader,
                          sts_dataloader,
-                         model, device, arg):
+                         model, rank, arg):
     model.eval()  # Switch to eval model, will turn off randomness like dropout.
 
     with torch.no_grad():
@@ -64,8 +64,8 @@ def model_eval_multitask(sentiment_dataloader,
             for step, batch in enumerate(tqdm(sentiment_dataloader, desc=f'eval', disable=TQDM_DISABLE)):
                 b_ids, b_mask, b_labels, b_sent_ids = batch['token_ids'], batch['attention_mask'], batch['labels'], batch['sent_ids']
 
-                b_ids = b_ids.to(device)
-                b_mask = b_mask.to(device)
+                b_ids = b_ids.cuda(rank)
+                b_mask = b_mask.cuda(rank)
 
                 logits = model.module.predict_sentiment(b_ids, b_mask)
                 y_hat = logits.argmax(dim=-1).flatten().cpu().numpy()
@@ -89,10 +89,10 @@ def model_eval_multitask(sentiment_dataloader,
                               batch['token_ids_2'], batch['attention_mask_2'],
                               batch['labels'], batch['sent_ids'])
 
-                b_ids1 = b_ids1.to(device)
-                b_mask1 = b_mask1.to(device)
-                b_ids2 = b_ids2.to(device)
-                b_mask2 = b_mask2.to(device)
+                b_ids1 = b_ids1.cuda(rank)
+                b_mask1 = b_mask1.cuda(rank)
+                b_ids2 = b_ids2.cuda(rank)
+                b_mask2 = b_mask2.cuda(rank)
 
                 logits = model.module.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)
                 y_hat = logits.sigmoid().round().flatten().cpu().numpy()
@@ -116,10 +116,10 @@ def model_eval_multitask(sentiment_dataloader,
                               batch['token_ids_2'], batch['attention_mask_2'],
                               batch['labels'], batch['sent_ids'])
 
-                b_ids1 = b_ids1.to(device)
-                b_mask1 = b_mask1.to(device)
-                b_ids2 = b_ids2.to(device)
-                b_mask2 = b_mask2.to(device)
+                b_ids1 = b_ids1.cuda(rank)
+                b_mask1 = b_mask1.cuda(rank)
+                b_ids2 = b_ids2.cuda(rank)
+                b_mask2 = b_mask2.cuda(rank)
 
                 logits = model.module.predict_similarity(b_ids1, b_mask1, b_ids2, b_mask2)
                 y_hat = logits.flatten().cpu().numpy()
@@ -144,7 +144,7 @@ def model_eval_multitask(sentiment_dataloader,
 def model_eval_test_multitask(sentiment_dataloader,
                          paraphrase_dataloader,
                          sts_dataloader,
-                         model, device):
+                         model, rank):
     model.eval()  # Switch to eval model, will turn off randomness like dropout.
 
     with torch.no_grad():
@@ -154,8 +154,8 @@ def model_eval_test_multitask(sentiment_dataloader,
         for step, batch in enumerate(tqdm(sentiment_dataloader, desc=f'eval', disable=TQDM_DISABLE)):
             b_ids, b_mask, b_sent_ids = batch['token_ids'], batch['attention_mask'],  batch['sent_ids']
 
-            b_ids = b_ids.to(device)
-            b_mask = b_mask.to(device)
+            b_ids = b_ids.cuda(rank)
+            b_mask = b_mask.cuda(rank)
 
             logits = model.module.predict_sentiment(b_ids, b_mask)
             y_hat = logits.argmax(dim=-1).flatten().cpu().numpy()
@@ -173,10 +173,10 @@ def model_eval_test_multitask(sentiment_dataloader,
                           batch['token_ids_2'], batch['attention_mask_2'],
                           batch['sent_ids'])
 
-            b_ids1 = b_ids1.to(device)
-            b_mask1 = b_mask1.to(device)
-            b_ids2 = b_ids2.to(device)
-            b_mask2 = b_mask2.to(device)
+            b_ids1 = b_ids1.cuda(rank)
+            b_mask1 = b_mask1.cuda(rank)
+            b_ids2 = b_ids2.cuda(rank)
+            b_mask2 = b_mask2.cuda(rank)
 
             logits = model.module.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)
             y_hat = logits.sigmoid().round().flatten().cpu().numpy()
@@ -194,10 +194,10 @@ def model_eval_test_multitask(sentiment_dataloader,
                           batch['token_ids_2'], batch['attention_mask_2'],
                           batch['sent_ids'])
 
-            b_ids1 = b_ids1.to(device)
-            b_mask1 = b_mask1.to(device)
-            b_ids2 = b_ids2.to(device)
-            b_mask2 = b_mask2.to(device)
+            b_ids1 = b_ids1.cuda(rank)
+            b_mask1 = b_mask1.cuda(rank)
+            b_ids2 = b_ids2.cuda(rank)
+            b_mask2 = b_mask2.cuda(rank)
 
             logits = model.module.predict_similarity(b_ids1, b_mask1, b_ids2, b_mask2)
             y_hat = logits.flatten().cpu().numpy()

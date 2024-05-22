@@ -14,6 +14,7 @@ writes all required submission files.
 
 import argparse
 import itertools
+import os
 import random
 from types import SimpleNamespace
 
@@ -40,6 +41,8 @@ from utils import p_print
 TQDM_DISABLE=True
 
 def setup(rank, world_size):
+    os.environ["MASTER_ADDR"] = 'localhost'
+    os.environ["MASTER_PORT"] = "12355"
     dist.init_process_group(
         "nccl",  # NCCL backend optimized for NVIDIA GPUs
         rank=rank,
@@ -264,11 +267,9 @@ def train_multitask(rank, world_size, args):
     in datasets.py to load in examples from the Quora and SemEval datasets.
     '''
     setup(rank, world_size)
-    
-    device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
-    p_print('using device', device)
 
-    summary_writer = SummaryWriter(f'runs/train-multitask-cycle-loader-without_autocast')
+    if rank == 0:
+        summary_writer = SummaryWriter(f'runs/train-multitask-cycle-loader-without_autocast')
     
     # Create the data and its corresponding datasets and dataloader.
     sst_train_data, sentiment_labels, para_train_data, sts_train_data = load_multitask_data(args.sst_train, args.para_train, args.sts_train, split ='train')
@@ -292,8 +293,8 @@ def train_multitask(rank, world_size, args):
     sst_train_data = SentenceClassificationDataset(sst_train_data, args)
     sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
 
-    sampler = DistributedSampler(sst_train_data, num_replicas=world_size, rank=rank)
-    sst_train_dataloader = DataLoader(sst_train_data, shuffle=True, batch_size=train_batch_size_sts_and_sst,
+    sampler = DistributedSampler(sst_train_data, num_replicas=world_size, rank=rank, shuffle=True)
+    sst_train_dataloader = DataLoader(sst_train_data, batch_size=train_batch_size_sts_and_sst,
                                       collate_fn=sst_train_data.collate_fn, sampler=sampler)
 
     sampler = DistributedSampler(sst_dev_data, num_replicas=world_size, rank=rank)                            
@@ -304,8 +305,8 @@ def train_multitask(rank, world_size, args):
     para_train_data = SentencePairDataset(para_train_data, args)
     para_dev_data = SentencePairDataset(para_dev_data, args)
 
-    sampler = DistributedSampler(para_train_data, num_replicas=world_size, rank=rank)
-    para_train_dataloader = DataLoader(para_train_data, shuffle=True, batch_size=train_batch_size_para,
+    sampler = DistributedSampler(para_train_data, num_replicas=world_size, rank=rank, shuffle=True)
+    para_train_dataloader = DataLoader(para_train_data, batch_size=train_batch_size_para,
                                       collate_fn=para_train_data.collate_fn, sampler=sampler)
     
     sampler = DistributedSampler(para_dev_data, num_replicas=world_size, rank=rank)
@@ -316,8 +317,8 @@ def train_multitask(rank, world_size, args):
     sts_train_data = SentencePairDataset(sts_train_data, args)
     sts_dev_data = SentencePairDataset(sts_dev_data, args)
 
-    sampler = DistributedSampler(sts_train_data, num_replicas=world_size, rank=rank)
-    sts_train_dataloader = DataLoader(sts_train_data, shuffle=True, batch_size=train_batch_size_sts_and_sst,
+    sampler = DistributedSampler(sts_train_data, num_replicas=world_size, rank=rank, shuffle=True)
+    sts_train_dataloader = DataLoader(sts_train_data, batch_size=train_batch_size_sts_and_sst,
                                        collate_fn=sts_train_data.collate_fn, sampler=sampler)
     
     sampler = DistributedSampler(sts_dev_data, num_replicas=world_size, rank=rank)
@@ -375,7 +376,7 @@ def train_multitask(rank, world_size, args):
 
             optimizer.step()
 
-            if step % 100 == 0:
+            if rank == 0 and step % 100 == 0:
                 overall_steps = epoch * len(sts_train_dataloader) + step
                 summary_writer.add_scalar('sts_train_loss', sts_training_loss.item(), overall_steps)
                 summary_writer.add_scalar('sst_train_loss', sst_training_loss.item(), overall_steps)
@@ -386,44 +387,42 @@ def train_multitask(rank, world_size, args):
         para_dev_acc, _, para_sent_ids, \
         sts_dev_corr, *_  = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, rank, args.train)
 
-        # summary_writer.add_scalar('sst_train_acc', sst_train_acc, epoch)
-        # summary_writer.add_scalar('para_train_acc', para_train_acc, epoch)
-        summary_writer.add_scalar('sst_dev_acc', sst_dev_acc, epoch)
-        summary_writer.add_scalar('para_dev_acc', para_dev_acc, epoch)
-        summary_writer.add_scalar('sts_dev_corr', sts_dev_corr, epoch)
+        if rank == 0:
+            # summary_writer.add_scalar('sst_train_acc', sst_train_acc, epoch)
+            # summary_writer.add_scalar('para_train_acc', para_train_acc, epoch)
+            summary_writer.add_scalar('sst_dev_acc', sst_dev_acc, epoch)
+            summary_writer.add_scalar('para_dev_acc', para_dev_acc, epoch)
+            summary_writer.add_scalar('sts_dev_corr', sts_dev_corr, epoch)
 
-        # save new mode if at least one of the dev accuracy is better
-        if sst_dev_acc > best_sst_dev or para_dev_acc > best_para_dev or sts_dev_corr > best_sts_corr:
-            p_print(f"Saving model at epoch {epoch}, previous dev accuracies: {best_sst_dev, best_para_dev, best_sts_corr}, new dev accuracies: {sst_dev_acc, para_dev_acc, sts_dev_corr}")
-            save_model(model, optimizer, args, config, args.filepath)
-            if sst_dev_acc > best_sst_dev:
-                best_sst_dev = sst_dev_acc
-            if para_dev_acc > best_para_dev:
-                best_para_dev = para_dev_acc
-            if sts_dev_corr > best_sts_corr:
-                best_sts_corr = sts_dev_corr
+            # save new mode if at least one of the dev accuracy is better
+            if sst_dev_acc > best_sst_dev or para_dev_acc > best_para_dev or sts_dev_corr > best_sts_corr:
+                p_print(f"Saving model at epoch {epoch}, previous dev accuracies: {best_sst_dev, best_para_dev, best_sts_corr}, new dev accuracies: {sst_dev_acc, para_dev_acc, sts_dev_corr}")
+                save_model(model, optimizer, args, config, args.filepath)
+                if sst_dev_acc > best_sst_dev:
+                    best_sst_dev = sst_dev_acc
+                if para_dev_acc > best_para_dev:
+                    best_para_dev = para_dev_acc
+                if sts_dev_corr > best_sts_corr:
+                    best_sts_corr = sts_dev_corr
 
         sts_train_loss = sts_train_loss / sts_num_batches
         para_train_loss = para_train_loss / para_num_batches
         sst_train_loss = sst_train_loss / sst_num_batches
 
         p_print(
-            f"Epoch {epoch}: sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, sst dev acc :: {sst_dev_acc :.3f}, para dev acc :: {para_dev_acc :.3f}, sts dev corr :: {sts_dev_corr :.3f}")
+            f"Epoch {epoch}: Rank: {rank} sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, sst dev acc :: {sst_dev_acc :.3f}, para dev acc :: {para_dev_acc :.3f}, sts dev corr :: {sts_dev_corr :.3f}")
     cleanup()
 
-def test_multitask(rank, world_size, args):
+def test_multitask(args):
     '''Test and save predictions on the dev and test sets of all three tasks.'''
-    setup(rank, world_size)
-
     with torch.no_grad():
-        device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
         saved = torch.load(args.filepath)
         config = saved['model_config']
 
         model = MultitaskBERT(config)
+        model = nn.DataParallel(model)
+        model.cuda()
         model.load_state_dict(saved['model'])
-        model = model.cuda(rank)
-        model = DDP(model, device_ids=[rank])
         
         p_print(f"Loaded model to test from {args.filepath}")
 
@@ -433,49 +432,41 @@ def test_multitask(rank, world_size, args):
         sst_dev_data, num_labels,para_dev_data, sts_dev_data = \
             load_multitask_data(args.sst_dev,args.para_dev,args.sts_dev,split='dev')
 
-        
         sst_test_data = SentenceClassificationTestDataset(sst_test_data, args)
         sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
 
-        sampler = DistributedSampler(sst_test_data, num_replicas=world_size, rank=rank)
-        sst_test_dataloader = DataLoader(sst_test_data, shuffle=True, batch_size=args.batch_size,
-                                         collate_fn=sst_test_data.collate_fn, sampler=sampler)
-
-        sampler = DistributedSampler(sst_dev_data, num_replicas=world_size, rank=rank)
+        sst_test_dataloader = DataLoader(sst_test_data, shuffle=False, batch_size=args.batch_size,
+                                         collate_fn=sst_test_data.collate_fn)
         sst_dev_dataloader = DataLoader(sst_dev_data, shuffle=False, batch_size=args.batch_size,
-                                        collate_fn=sst_dev_data.collate_fn, sampler=sampler)
+                                        collate_fn=sst_dev_data.collate_fn)
 
         para_test_data = SentencePairTestDataset(para_test_data, args)
         para_dev_data = SentencePairDataset(para_dev_data, args)
 
-        sampler = DistributedSampler(para_test_data, num_replicas=world_size, rank=rank)
-        para_test_dataloader = DataLoader(para_test_data, shuffle=True, batch_size=args.batch_size,
-                                          collate_fn=para_test_data.collate_fn, sampler=sampler)
-        sampler = DistributedSampler(para_dev_data, num_replicas=world_size, rank=rank)
+        para_test_dataloader = DataLoader(para_test_data, shuffle=False, batch_size=args.batch_size,
+                                          collate_fn=para_test_data.collate_fn)
         para_dev_dataloader = DataLoader(para_dev_data, shuffle=False, batch_size=args.batch_size,
-                                         collate_fn=para_dev_data.collate_fn, sampler=sampler)
+                                         collate_fn=para_dev_data.collate_fn)
 
         sts_test_data = SentencePairTestDataset(sts_test_data, args)
         sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
 
-        sampler = DistributedSampler(sts_test_data, num_replicas=world_size, rank=rank)
-        sts_test_dataloader = DataLoader(sts_test_data, shuffle=True, batch_size=args.batch_size,
-                                         collate_fn=sts_test_data.collate_fn, sampler=sampler)
-        sampler = DistributedSampler(sts_dev_data, num_replicas=world_size, rank=rank)
+        sts_test_dataloader = DataLoader(sts_test_data, shuffle=False, batch_size=args.batch_size,
+                                         collate_fn=sts_test_data.collate_fn)
         sts_dev_dataloader = DataLoader(sts_dev_data, shuffle=False, batch_size=args.batch_size,
-                                        collate_fn=sts_dev_data.collate_fn, sampler=sampler)
+                                        collate_fn=sts_dev_data.collate_fn)
 
         dev_sentiment_accuracy,dev_sst_y_pred, dev_sst_sent_ids, \
             dev_paraphrase_accuracy, dev_para_y_pred, dev_para_sent_ids, \
             dev_sts_corr, dev_sts_y_pred, dev_sts_sent_ids = model_eval_multitask(sst_dev_dataloader,
                                                                     para_dev_dataloader,
-                                                                    sts_dev_dataloader, model, device, args.train)
+                                                                    sts_dev_dataloader, model, 0, args.train)
 
         test_sst_y_pred, \
             test_sst_sent_ids, test_para_y_pred, test_para_sent_ids, test_sts_y_pred, test_sts_sent_ids = \
                 model_eval_test_multitask(sst_test_dataloader,
                                           para_test_dataloader,
-                                          sts_test_dataloader, model, rank)
+                                          sts_test_dataloader, model, 0)
 
         with open(args.sst_dev_out, "w+") as f:
             p_print(f"dev sentiment acc :: {dev_sentiment_accuracy :.3f}")
@@ -509,7 +500,6 @@ def test_multitask(rank, world_size, args):
             f.write(f"id \t Predicted_Similiary \n")
             for p, s in zip(test_sts_sent_ids, test_sts_y_pred):
                 f.write(f"{p} , {s} \n")
-    cleanup()
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -560,8 +550,4 @@ if __name__ == "__main__":
              args=(world_size, args),  # 10 epochs, for example
              nprocs=world_size,
              join=True)
-    
-    mp.spawn(test_multitask,
-             args=(world_size, args),  # 10 epochs, for example
-             nprocs=world_size,
-             join=True)
+    test_multitask(args)
