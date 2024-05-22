@@ -12,33 +12,43 @@ Running `python multitask_classifier.py` trains and tests your MultitaskBERT and
 writes all required submission files.
 '''
 
+import argparse
 import itertools
-import random, numpy as np, argparse
+import random
 from types import SimpleNamespace
 
+import numpy as np
 import torch
-from torch import nn
+import torch.distributed as dist
+import torch.multiprocessing as mp
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch import nn
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 from bert import BertModel
+from datasets import (SentenceClassificationDataset,
+                      SentenceClassificationTestDataset, SentencePairDataset,
+                      SentencePairTestDataset, load_multitask_data)
+from evaluation import (model_eval_multitask, model_eval_sst,
+                        model_eval_test_multitask)
 from optimizer import AdamW
-from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
-
-from datasets import (
-    SentenceClassificationDataset,
-    SentenceClassificationTestDataset,
-    SentencePairDataset,
-    SentencePairTestDataset,
-    load_multitask_data
-)
-
-from evaluation import model_eval_sst, model_eval_multitask, model_eval_test_multitask
 from utils import p_print
 
-
 TQDM_DISABLE=True
+
+def setup(rank, world_size):
+    dist.init_process_group(
+        "nccl",  # NCCL backend optimized for NVIDIA GPUs
+        rank=rank,
+        world_size=world_size
+    )
+    torch.cuda.set_device(rank)
+
+def cleanup():
+    dist.destroy_process_group()
 
 
 # Fix the random seed.
@@ -188,15 +198,15 @@ def save_model(model, optimizer, args, config, filepath):
     torch.save(save_info, filepath)
     p_print(f"save the model to {filepath}")
 
-def train(batch, device, model, type):
+def train(batch, rank, model, type):
     loss = None
 
     if type == 'sst':
         b_ids, b_mask, b_labels = (batch['token_ids'],
                                    batch['attention_mask'], batch['labels'])
-        b_ids = b_ids.to(device)
-        b_mask = b_mask.to(device)
-        b_labels = b_labels.to(device)
+        b_ids = b_ids.cuda(rank)
+        b_mask = b_mask.cuda(rank)
+        b_labels = b_labels.cuda(rank)
 
         logits = model.module.predict_sentiment(b_ids, b_mask)        
         # logits dim: B, class_size. b_labels dim: B, (class indices)
@@ -208,14 +218,14 @@ def train(batch, device, model, type):
             (batch['token_ids_1'], batch['token_type_ids_1'], batch['attention_mask_1'], batch['token_ids_2'],
              batch['token_type_ids_2'], batch['attention_mask_2'], batch['labels'], batch['sent_ids'])
 
-        token_ids_1 = token_ids_1.to(device)
-        token_type_ids_1 = token_type_ids_1.to(device)  # need to modify bert embedding to use this later
-        attention_mask_1 = attention_mask_1.to(device)
+        token_ids_1 = token_ids_1.cuda(rank)
+        token_type_ids_1 = token_type_ids_1.cuda(rank)  # need to modify bert embedding to use this later
+        attention_mask_1 = attention_mask_1.cuda(rank)
         
-        token_ids_2 = token_ids_2.to(device)
-        token_type_ids_2 = token_type_ids_2.to(device)  # need to modify bert embedding to use this later
-        attention_mask_2 = attention_mask_2.to(device)
-        b_labels = b_labels.to(device, dtype=torch.float32)
+        token_ids_2 = token_ids_2.cuda(rank)
+        token_type_ids_2 = token_type_ids_2.cuda(rank)  # need to modify bert embedding to use this later
+        attention_mask_2 = attention_mask_2.cuda(rank)
+        b_labels = b_labels.type(torch.float32).cuda(rank)
 
         logits = model.module.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
         # logits dim: B, b_labels dim: B
@@ -227,14 +237,14 @@ def train(batch, device, model, type):
             (batch['token_ids_1'], batch['token_type_ids_1'], batch['attention_mask_1'], batch['token_ids_2'],
              batch['token_type_ids_2'], batch['attention_mask_2'], batch['labels'], batch['sent_ids'])
 
-        token_ids_1 = token_ids_1.to(device)
-        token_type_ids_1 = token_type_ids_1.to(device)  # need to modify bert embedding to use this later
-        attention_mask_1 = attention_mask_1.to(device)
+        token_ids_1 = token_ids_1.cuda(rank)
+        token_type_ids_1 = token_type_ids_1.cuda(rank)  # need to modify bert embedding to use this later
+        attention_mask_1 = attention_mask_1.cuda(rank)
         
-        token_ids_2 = token_ids_2.to(device)
-        token_type_ids_2 = token_type_ids_2.to(device)  # need to modify bert embedding to use this later
-        attention_mask_2 = attention_mask_2.to(device)
-        b_labels = b_labels.to(device, dtype=torch.float32)
+        token_ids_2 = token_ids_2.cuda(rank)
+        token_type_ids_2 = token_type_ids_2.cuda(rank)  # need to modify bert embedding to use this later
+        attention_mask_2 = attention_mask_2.cuda(rank)
+        b_labels = b_labels.type(torch.float32).cuda(rank)
 
         # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
         logits = model.module.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
@@ -245,7 +255,7 @@ def train(batch, device, model, type):
 
     return loss
 
-def train_multitask(args):
+def train_multitask(rank, world_size, args):
     '''Train MultitaskBERT.
 
     Currently only trains on SST dataset. The way you incorporate training examples
@@ -253,6 +263,8 @@ def train_multitask(args):
     look at test_multitask below to see how you can use the custom torch `Dataset`s
     in datasets.py to load in examples from the Quora and SemEval datasets.
     '''
+    setup(rank, world_size)
+    
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
     p_print('using device', device)
 
@@ -279,26 +291,38 @@ def train_multitask(args):
     # SST Data
     sst_train_data = SentenceClassificationDataset(sst_train_data, args)
     sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
+
+    sampler = DistributedSampler(sst_train_data, num_replicas=world_size, rank=rank)
     sst_train_dataloader = DataLoader(sst_train_data, shuffle=True, batch_size=train_batch_size_sts_and_sst,
-                                      collate_fn=sst_train_data.collate_fn, num_workers=4)
+                                      collate_fn=sst_train_data.collate_fn, sampler=sampler)
+
+    sampler = DistributedSampler(sst_dev_data, num_replicas=world_size, rank=rank)                            
     sst_dev_dataloader = DataLoader(sst_dev_data, shuffle=False, batch_size=args.batch_size,
-                                    collate_fn=sst_dev_data.collate_fn)
+                                    collate_fn=sst_dev_data.collate_fn, sampler=sampler)
 
     # Para Data
     para_train_data = SentencePairDataset(para_train_data, args)
     para_dev_data = SentencePairDataset(para_dev_data, args)
+
+    sampler = DistributedSampler(para_train_data, num_replicas=world_size, rank=rank)
     para_train_dataloader = DataLoader(para_train_data, shuffle=True, batch_size=train_batch_size_para,
-                                      collate_fn=para_train_data.collate_fn, num_workers=4)
+                                      collate_fn=para_train_data.collate_fn, sampler=sampler)
+    
+    sampler = DistributedSampler(para_dev_data, num_replicas=world_size, rank=rank)
     para_dev_dataloader = DataLoader(para_dev_data, shuffle=False, batch_size=args.batch_size,
-                                    collate_fn=para_dev_data.collate_fn)
+                                    collate_fn=para_dev_data.collate_fn, sampler=sampler)
 
     # STS Data
     sts_train_data = SentencePairDataset(sts_train_data, args)
     sts_dev_data = SentencePairDataset(sts_dev_data, args)
+
+    sampler = DistributedSampler(sts_train_data, num_replicas=world_size, rank=rank)
     sts_train_dataloader = DataLoader(sts_train_data, shuffle=True, batch_size=train_batch_size_sts_and_sst,
-                                       collate_fn=sts_train_data.collate_fn, num_workers=4)
+                                       collate_fn=sts_train_data.collate_fn, sampler=sampler)
+    
+    sampler = DistributedSampler(sts_dev_data, num_replicas=world_size, rank=rank)
     sts_dev_dataloader = DataLoader(sts_dev_data, shuffle=False, batch_size=args.batch_size,
-                                     collate_fn=sts_dev_data.collate_fn)
+                                     collate_fn=sts_dev_data.collate_fn, sampler=sampler)
 
     # Init model.
     config = {'hidden_dropout_prob': args.hidden_dropout_prob,
@@ -310,8 +334,8 @@ def train_multitask(args):
     config = SimpleNamespace(**config)
 
     model = MultitaskBERT(config)
-    model = nn.DataParallel(model)  
-    model = model.to(device)
+    model = model.cuda(rank)
+    model = DDP(model, device_ids=[rank])
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr)
@@ -335,17 +359,17 @@ def train_multitask(args):
             optimizer.zero_grad()
             
             # STS symantic textual simiarity training
-            sts_training_loss = train(sts_batch, device, model, 'sts')
+            sts_training_loss = train(sts_batch, rank, model, 'sts')
             sts_train_loss += sts_training_loss.item()
             sts_num_batches += 1
             
             # paraphrase training
-            para_training_loss = train(para_batch, device, model, 'para')
+            para_training_loss = train(para_batch, rank, model, 'para')
             para_train_loss += para_training_loss.item()
             para_num_batches += 1
 
             # SST sentiment training
-            sst_training_loss = train(sst_batch, device, model, 'sst')
+            sst_training_loss = train(sst_batch, rank, model, 'sst')
             sst_train_loss += sst_training_loss.item()
             sst_num_batches += 1
 
@@ -358,14 +382,9 @@ def train_multitask(args):
                 summary_writer.add_scalar('para_train_loss', para_training_loss.item(), overall_steps)
     
         
-        # Skipping training accuracy since we already have training loss
-        # sst_train_acc, _, _, \
-        # para_train_acc, _, _, \
-        # sts_train_corr, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device, args.train)
-        
         sst_dev_acc, _, sst_sent_ids, \
         para_dev_acc, _, para_sent_ids, \
-        sts_dev_corr, *_  = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device, args.train)
+        sts_dev_corr, *_  = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, rank, args.train)
 
         # summary_writer.add_scalar('sst_train_acc', sst_train_acc, epoch)
         # summary_writer.add_scalar('para_train_acc', para_train_acc, epoch)
@@ -390,18 +409,22 @@ def train_multitask(args):
 
         p_print(
             f"Epoch {epoch}: sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, sst dev acc :: {sst_dev_acc :.3f}, para dev acc :: {para_dev_acc :.3f}, sts dev corr :: {sts_dev_corr :.3f}")
+    cleanup()
 
-def test_multitask(args):
+def test_multitask(rank, world_size, args):
     '''Test and save predictions on the dev and test sets of all three tasks.'''
+    setup(rank, world_size)
+
     with torch.no_grad():
         device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
         saved = torch.load(args.filepath)
         config = saved['model_config']
 
         model = MultitaskBERT(config)
-        model = nn.DataParallel(model)
         model.load_state_dict(saved['model'])
-        model = model.to(device)
+        model = model.cuda(rank)
+        model = DDP(model, device_ids=[rank])
+        
         p_print(f"Loaded model to test from {args.filepath}")
 
         sst_test_data, num_labels,para_test_data, sts_test_data = \
@@ -410,29 +433,37 @@ def test_multitask(args):
         sst_dev_data, num_labels,para_dev_data, sts_dev_data = \
             load_multitask_data(args.sst_dev,args.para_dev,args.sts_dev,split='dev')
 
+        
         sst_test_data = SentenceClassificationTestDataset(sst_test_data, args)
         sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
 
+        sampler = DistributedSampler(sst_test_data, num_replicas=world_size, rank=rank)
         sst_test_dataloader = DataLoader(sst_test_data, shuffle=True, batch_size=args.batch_size,
-                                         collate_fn=sst_test_data.collate_fn)
+                                         collate_fn=sst_test_data.collate_fn, sampler=sampler)
+
+        sampler = DistributedSampler(sst_dev_data, num_replicas=world_size, rank=rank)
         sst_dev_dataloader = DataLoader(sst_dev_data, shuffle=False, batch_size=args.batch_size,
-                                        collate_fn=sst_dev_data.collate_fn)
+                                        collate_fn=sst_dev_data.collate_fn, sampler=sampler)
 
         para_test_data = SentencePairTestDataset(para_test_data, args)
         para_dev_data = SentencePairDataset(para_dev_data, args)
 
+        sampler = DistributedSampler(para_test_data, num_replicas=world_size, rank=rank)
         para_test_dataloader = DataLoader(para_test_data, shuffle=True, batch_size=args.batch_size,
-                                          collate_fn=para_test_data.collate_fn)
+                                          collate_fn=para_test_data.collate_fn, sampler=sampler)
+        sampler = DistributedSampler(para_dev_data, num_replicas=world_size, rank=rank)
         para_dev_dataloader = DataLoader(para_dev_data, shuffle=False, batch_size=args.batch_size,
-                                         collate_fn=para_dev_data.collate_fn)
+                                         collate_fn=para_dev_data.collate_fn, sampler=sampler)
 
         sts_test_data = SentencePairTestDataset(sts_test_data, args)
         sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
 
+        sampler = DistributedSampler(sts_test_data, num_replicas=world_size, rank=rank)
         sts_test_dataloader = DataLoader(sts_test_data, shuffle=True, batch_size=args.batch_size,
-                                         collate_fn=sts_test_data.collate_fn)
+                                         collate_fn=sts_test_data.collate_fn, sampler=sampler)
+        sampler = DistributedSampler(sts_dev_data, num_replicas=world_size, rank=rank)
         sts_dev_dataloader = DataLoader(sts_dev_data, shuffle=False, batch_size=args.batch_size,
-                                        collate_fn=sts_dev_data.collate_fn)
+                                        collate_fn=sts_dev_data.collate_fn, sampler=sampler)
 
         dev_sentiment_accuracy,dev_sst_y_pred, dev_sst_sent_ids, \
             dev_paraphrase_accuracy, dev_para_y_pred, dev_para_sent_ids, \
@@ -444,7 +475,7 @@ def test_multitask(args):
             test_sst_sent_ids, test_para_y_pred, test_para_sent_ids, test_sts_y_pred, test_sts_sent_ids = \
                 model_eval_test_multitask(sst_test_dataloader,
                                           para_test_dataloader,
-                                          sts_test_dataloader, model, device)
+                                          sts_test_dataloader, model, rank)
 
         with open(args.sst_dev_out, "w+") as f:
             p_print(f"dev sentiment acc :: {dev_sentiment_accuracy :.3f}")
@@ -478,7 +509,7 @@ def test_multitask(args):
             f.write(f"id \t Predicted_Similiary \n")
             for p, s in zip(test_sts_sent_ids, test_sts_y_pred):
                 f.write(f"{p} , {s} \n")
-
+    cleanup()
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -523,5 +554,14 @@ if __name__ == "__main__":
     args = get_args()
     args.filepath = f'{args.fine_tune_mode}-{args.epochs}-{args.lr}-multitask.pt' # Save path.
     seed_everything(args.seed)  # Fix the seed for reproducibility.
-    train_multitask(args)
-    test_multitask(args)
+    
+    world_size = torch.cuda.device_count()
+    mp.spawn(train_multitask,
+             args=(world_size, args),  # 10 epochs, for example
+             nprocs=world_size,
+             join=True)
+    
+    mp.spawn(test_multitask,
+             args=(world_size, args),  # 10 epochs, for example
+             nprocs=world_size,
+             join=True)
