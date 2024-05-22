@@ -17,7 +17,6 @@ import random, numpy as np, argparse
 from types import SimpleNamespace
 
 import torch
-from torch.cuda.amp import autocast, GradScaler
 from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -189,7 +188,7 @@ def save_model(model, optimizer, args, config, filepath):
     torch.save(save_info, filepath)
     p_print(f"save the model to {filepath}")
 
-def train(batch, device, optimizer, model, type, scaler):
+def train(batch, device, model, type):
     loss = None
 
     if type == 'sst':
@@ -199,12 +198,9 @@ def train(batch, device, optimizer, model, type, scaler):
         b_mask = b_mask.to(device)
         b_labels = b_labels.to(device)
 
-        optimizer.zero_grad()
-        with autocast():
-            logits = model.module.predict_sentiment(b_ids, b_mask)
-            
-            # logits dim: B, class_size. b_labels dim: B, (class indices)
-            loss = nn.CrossEntropyLoss(reduction='mean')(logits, b_labels)
+        logits = model.module.predict_sentiment(b_ids, b_mask)        
+        # logits dim: B, class_size. b_labels dim: B, (class indices)
+        loss = nn.CrossEntropyLoss(reduction='mean')(logits, b_labels)
 
     elif type == 'para':
         (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2,
@@ -221,10 +217,9 @@ def train(batch, device, optimizer, model, type, scaler):
         attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.to(device, dtype=torch.float32)
 
-        with autocast():
-            logits = model.module.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-            # logits dim: B, b_labels dim: B
-            loss = nn.BCEWithLogitsLoss(reduction='mean')(logits, b_labels)
+        logits = model.module.predict_paraphrase(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+        # logits dim: B, b_labels dim: B
+        loss = nn.BCEWithLogitsLoss(reduction='mean')(logits, b_labels)
     
     elif type == 'sts':
         (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2,
@@ -241,13 +236,12 @@ def train(batch, device, optimizer, model, type, scaler):
         attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.to(device, dtype=torch.float32)
 
-        with autocast():
-            # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
-            logits = model.module.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-            loss = nn.MSELoss(reduction='mean')(logits, b_labels)
+        # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
+        logits = model.module.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+        loss = nn.MSELoss(reduction='mean')(logits, b_labels)
 
     # Run backprop for the loss from the task
-    scaler.scale(loss).backward()
+    loss.backward()
 
     return loss
 
@@ -262,8 +256,7 @@ def train_multitask(args):
     device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
     p_print('using device', device)
 
-    summary_writer = SummaryWriter(f'runs/train-multitask-cycle-loader')
-    scaler = GradScaler()
+    summary_writer = SummaryWriter(f'runs/train-multitask-cycle-loader-without_autocast')
     
     # Create the data and its corresponding datasets and dataloader.
     sst_train_data, sentiment_labels, para_train_data, sts_train_data = load_multitask_data(args.sst_train, args.para_train, args.sts_train, split ='train')
@@ -280,14 +273,14 @@ def train_multitask(args):
     # batch size for para data. Since para data size is almost 46 times
     # sts data, with 15 times batch size, we should have covered all the 
     # para data in every 3rd epoch
-    train_batch_size_sts_and_sst = 4
-    train_batch_size_para = 32
+    train_batch_size_sts_and_sst = 8
+    train_batch_size_para = 64
     
     # SST Data
     sst_train_data = SentenceClassificationDataset(sst_train_data, args)
     sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
     sst_train_dataloader = DataLoader(sst_train_data, shuffle=True, batch_size=train_batch_size_sts_and_sst,
-                                      collate_fn=sst_train_data.collate_fn)
+                                      collate_fn=sst_train_data.collate_fn, num_workers=4)
     sst_dev_dataloader = DataLoader(sst_dev_data, shuffle=False, batch_size=args.batch_size,
                                     collate_fn=sst_dev_data.collate_fn)
 
@@ -295,7 +288,7 @@ def train_multitask(args):
     para_train_data = SentencePairDataset(para_train_data, args)
     para_dev_data = SentencePairDataset(para_dev_data, args)
     para_train_dataloader = DataLoader(para_train_data, shuffle=True, batch_size=train_batch_size_para,
-                                      collate_fn=para_train_data.collate_fn)
+                                      collate_fn=para_train_data.collate_fn, num_workers=4)
     para_dev_dataloader = DataLoader(para_dev_data, shuffle=False, batch_size=args.batch_size,
                                     collate_fn=para_dev_data.collate_fn)
 
@@ -303,7 +296,7 @@ def train_multitask(args):
     sts_train_data = SentencePairDataset(sts_train_data, args)
     sts_dev_data = SentencePairDataset(sts_dev_data, args)
     sts_train_dataloader = DataLoader(sts_train_data, shuffle=True, batch_size=train_batch_size_sts_and_sst,
-                                       collate_fn=sts_train_data.collate_fn)
+                                       collate_fn=sts_train_data.collate_fn, num_workers=4)
     sts_dev_dataloader = DataLoader(sts_dev_data, shuffle=False, batch_size=args.batch_size,
                                      collate_fn=sts_dev_data.collate_fn)
 
@@ -317,7 +310,7 @@ def train_multitask(args):
     config = SimpleNamespace(**config)
 
     model = MultitaskBERT(config)
-    model = nn.DataParallel(model)
+    model = nn.DataParallel(model)  
     model = model.to(device)
 
     lr = args.lr
@@ -342,22 +335,21 @@ def train_multitask(args):
             optimizer.zero_grad()
             
             # STS symantic textual simiarity training
-            sts_training_loss = train(sts_batch, device, optimizer, model, 'sts', scaler)
+            sts_training_loss = train(sts_batch, device, model, 'sts')
             sts_train_loss += sts_training_loss.item()
             sts_num_batches += 1
             
             # paraphrase training
-            para_training_loss = train(para_batch, device, optimizer, model, 'para', scaler)
+            para_training_loss = train(para_batch, device, model, 'para')
             para_train_loss += para_training_loss.item()
             para_num_batches += 1
 
             # SST sentiment training
-            sst_training_loss = train(sst_batch, device, optimizer, model, 'sst', scaler)
+            sst_training_loss = train(sst_batch, device, model, 'sst')
             sst_train_loss += sst_training_loss.item()
             sst_num_batches += 1
 
-            scaler.step(optimizer)
-            scaler.update()
+            optimizer.step()
 
             if step % 100 == 0:
                 overall_steps = epoch * len(sts_train_dataloader) + step
