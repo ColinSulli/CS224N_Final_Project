@@ -51,7 +51,7 @@ class BertSentimentClassifier(torch.nn.Module):
                 param.requires_grad = True
 
         # Create any instance variables you need to classify the sentiment of BERT embeddings.
-        
+        ### TODO
         # Lets make sure that the pooling layer has dimension equal to hidden size
         assert(self.bert.state_dict()['pooler_dense.weight'].shape[0] == config.hidden_size)
 
@@ -65,6 +65,7 @@ class BertSentimentClassifier(torch.nn.Module):
         # HINT: You should consider what is an appropriate return value given that
         # the training loop currently uses F.cross_entropy as the loss function.
 
+        ### TODO
         # bert.forward gives us the pooler_output which is the hidden state of the [CLS] token
         pooler_output = self.bert.forward(input_ids, attention_mask)['pooler_output']
         pooler_output = self.dropout(pooler_output)

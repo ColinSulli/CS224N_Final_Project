@@ -58,7 +58,9 @@ class BertSelfAttention(nn.Module):
     # - Before returning, concatenate multi-heads to recover the original shape:
     #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
 
-        # Attention scores are calculated by multiplying the key and query to obtain
+    ### TODO
+
+    # Attention scores are calculated by multiplying the key and query to obtain
     # a score matrix S of size [bs, num_attention_heads, seq_len, seq_len].
     # S[*, i, j, k] represents the (unnormalized) attention score between the j-th and k-th
     # token, given by i-th attention head.
@@ -217,6 +219,7 @@ class BertModel(BertPreTrainedModel):
     input_shape = input_ids.size()
     seq_length = input_shape[1]
 
+    ### TODO
     inputs_embeds = self.word_embedding(input_ids)    
 
     # Get token type ids. Since we are not considering token type, this embedding is
@@ -225,7 +228,7 @@ class BertModel(BertPreTrainedModel):
     tk_type_embeds = self.tk_type_embedding(tk_type_ids)
 
     # Add three embeddings together; then apply embed_layer_norm and dropout and return.
-    
+    ### TODO
     sum_embeds = inputs_embeds + tk_type_embeds
     if not self.use_rotary_embed:
       # Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
