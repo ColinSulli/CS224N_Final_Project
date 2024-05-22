@@ -165,7 +165,7 @@ class MultitaskBERT(nn.Module):
         att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
         score = self.predict_similarity(input_ids_1, attention_mask_1, input_ids_2, attention_mask_2)
-
+        score = torch.sigmoid(score) * 2 - 1
         output_cat = torch.cat((att_1, att_2), dim=1)
         output_cat = self.dropout(output_cat)
         #output_cat = self.para_classifier(output_cat)
@@ -189,7 +189,7 @@ class MultitaskBERT(nn.Module):
         output_cat = torch.cat((att_1, att_2), dim=1)
 
         output_cat = self.dropout(output_cat)
-        output_cat = self.para_classifier(output_cat)
+        output_cat = self.sts_classifier(output_cat)
 
         #input_cos = F.cosine_similarity(sim_output, output_cat, dim=1)
         input_cos = 5 * torch.sigmoid(output_cat)
