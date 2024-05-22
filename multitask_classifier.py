@@ -183,7 +183,7 @@ class MultitaskBERT(nn.Module):
         # cosine similarity
         att_1 = self.bert.forward(input_ids_1, attention_mask_1)['pooler_output']
         att_2 = self.bert.forward(input_ids_2, attention_mask_2)['pooler_output']
-        output_cat = torch.cat((output_1, output_2), dim=1)
+        output_cat = torch.cat((att_1, att_2), dim=1)
 
         output_cat = self.dropout(output_cat)
         sim_output = self.para_classifier(output_cat)
