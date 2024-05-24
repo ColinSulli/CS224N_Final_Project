@@ -19,6 +19,14 @@
             "program": "classifier.py",
             "console": "integratedTerminal",
             "args": ["--use_gpu", "--fine-tune-mode", "last-linear-layer", "--lr", "1e-3", "--use_rotary_embed"]
+        },
+        {
+            "name": "multi_task",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "multitask_classifier.py",
+            "console": "integratedTerminal",
+            "args": ["--fine-tune-mode", "last-linear-layer", "--lr", "1e-3"]
         }
     ]
 }

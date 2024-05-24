@@ -347,7 +347,7 @@ def train_multitask(rank, world_size, args):
         device = torch.device("cpu")
 
     if rank == 0:
-        run_name = f'{datetime.datetime.now().__str__()}-complex-repr-trimmed-para-per-epoch-final'
+        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-complex-repr-trimmed-para-per-epoch-final"
         summary_writer = SummaryWriter(
             f"runs/{run_name}"
         )
@@ -665,7 +665,7 @@ def get_args():
 if __name__ == "__main__":
     args = get_args()
     args.filepath = (
-        f"{args.fine_tune_mode}-{args.epochs}-{args.lr}-multitask.pt"  # Save path.
+        f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-{args.fine_tune_mode}-{args.epochs}-{args.lr}-multitask.pt"  # Save path.
     )
     seed_everything(args.seed)  # Fix the seed for reproducibility.
 

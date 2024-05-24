@@ -357,7 +357,7 @@ def p_print(*args):
     
     # open the file in append mode
     with open('logs/log.txt', 'a') as f:
-        print(datetime.datetime.now().__str__() + ' ' + " ".join(map(str, args)), file=f, flush=True)
+        print(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + ' ' + " ".join(map(str, args)), file=f, flush=True)
 
 
 def get_model(model):
