@@ -201,8 +201,6 @@ class BertModel(BertPreTrainedModel):
     
     # changes for rotary embedding
     self.use_rotary_embed = config.use_rotary_embed
-    p_print('using rope:', self.use_rotary_embed)
-    
     
     # ToDo: Check if when using rope, pos_embedding should not get gradient updates
     self.pos_embedding = nn.Embedding(config.max_position_embeddings, config.hidden_size)

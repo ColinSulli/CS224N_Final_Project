@@ -13,6 +13,7 @@ writes all required submission files.
 """
 
 import argparse
+import datetime
 import itertools
 import os
 import random
@@ -346,10 +347,17 @@ def train_multitask(rank, world_size, args):
         device = torch.device("cpu")
 
     if rank == 0:
+        run_name = f'{datetime.datetime.now().__str__()}-complex-repr-trimmed-para-per-epoch-final'
         summary_writer = SummaryWriter(
-            f"runs/train-multitask-complex-repr-trimmed-para-per-epoch-final"
+            f"runs/{run_name}"
         )
+        p_print(f'\n\n\n*** Train multitask {run_name} ***')
+        p_print('device: {}, debug: {}'.format(device, DEBUG))
 
+    use_multi_gpu = False
+    if world_size > 1:
+        use_multi_gpu = True
+    
     # Get data loaders for training and validation.
     (
         sentiment_labels,
@@ -359,7 +367,7 @@ def train_multitask(rank, world_size, args):
         para_dev_dataloader,
         sst_dev_dataloader,
         sts_dev_dataloader,
-    ) = data_loaders_for_train_and_validation(args, rank, world_size, debug=DEBUG)
+    ) = data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu, debug=DEBUG)
 
     # Init model.
     config = {
@@ -526,7 +534,7 @@ def test_multitask(args):
             para_dev_dataloader,
             sst_dev_dataloader,
             sts_dev_dataloader,
-        ) = data_loaders_for_test(args, debug=DEBUG)
+        ) = data_loaders_for_test(args, use_multi_gpu=False, debug=DEBUG)
 
         (
             dev_sentiment_accuracy,

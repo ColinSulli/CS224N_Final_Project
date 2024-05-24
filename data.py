@@ -8,7 +8,7 @@ from datasets import (
 from torch.utils.data import DistributedSampler, DataLoader
 
 
-def data_loaders_for_train_and_validation(args, rank, world_size, debug=False):
+def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=False, debug=False):
     # Create the data and its corresponding datasets and dataloader.
     sst_train_data, sentiment_labels, para_train_data, sts_train_data = (
         load_multitask_data(
@@ -62,7 +62,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, debug=False):
             data,
             batch_size,
             data.collate_fn,
-            args.use_gpu,
+            use_multi_gpu,
             world_size,
             rank,
             should_shuffle,
@@ -79,7 +79,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, debug=False):
     )
 
 
-def data_loaders_for_test(args, debug=False):
+def data_loaders_for_test(args, use_multi_gpu=False, debug=False):
     sst_test_data, num_labels, para_test_data, sts_test_data = load_multitask_data(
         args.sst_test, args.para_test, args.sts_test, split="test"
     )
@@ -118,7 +118,7 @@ def data_loaders_for_test(args, debug=False):
     dataloaders = {}
     for name, data, batch_size, should_shuffle in datasets:
         dataloaders[name] = create_data_loader(
-            data, batch_size, data.collate_fn, args.use_gpu
+            data, batch_size, data.collate_fn, use_multi_gpu
         )
 
     return (
@@ -132,11 +132,10 @@ def data_loaders_for_test(args, debug=False):
 
 
 def create_data_loader(
-    data, batch_size, collate_fn, use_gpu, world_size=None, rank=None, shuffle=False
+    data, batch_size, collate_fn, use_multi_gpu, world_size=None, rank=None, shuffle=False
 ):
     # send a distributed data sampler if using GPU otherwise, just return a data loader with shuffle
-    if use_gpu:
-
+    if use_multi_gpu:
         sampler = DistributedSampler(
             data, num_replicas=world_size, rank=rank, shuffle=shuffle
         )
