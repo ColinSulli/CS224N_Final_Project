@@ -58,7 +58,7 @@ class BertSelfAttention(nn.Module):
     # - Before returning, concatenate multi-heads to recover the original shape:
     #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
 
-        # Attention scores are calculated by multiplying the key and query to obtain
+    # Attention scores are calculated by multiplying the key and query to obtain
     # a score matrix S of size [bs, num_attention_heads, seq_len, seq_len].
     # S[*, i, j, k] represents the (unnormalized) attention score between the j-th and k-th
     # token, given by i-th attention head.
