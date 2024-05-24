@@ -349,5 +349,17 @@ def get_extended_attention_mask(attention_mask: Tensor, dtype) -> Tensor:
 
 def p_print(*args):
     print(" ".join(map(str, args)))
+
+    # if log directory does not exist, create it
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+    
+    # open the file in append mode
     with open('logs/log.txt', 'a') as f:
         print(" ".join(map(str, args)), file=f, flush=True)
+
+
+def get_model(model):
+  if isinstance(model, nn.DataParallel) or isinstance(model, nn.parallel.DistributedDataParallel):
+    return model.module
+  return model
