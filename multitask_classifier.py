@@ -218,7 +218,7 @@ def train(batch, device, optimizer, model, type):
             logits = logits.to(torch.float)
 
             #loss = F.cross_entropy(logits, b_labels.to(torch.float).view(-1), reduction='sum') / args.batch_size
-            loss = nn.MSELoss(reduction="mean")(logits, b_labels.to(torch.float).view(-1))
+            loss = nn.MSELoss(reduction="sum")(logits, b_labels.to(torch.float).view(-1)) / args.batch_size
 
         loss.backward()
         optimizer.step()
