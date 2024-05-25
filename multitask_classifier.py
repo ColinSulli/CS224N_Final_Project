@@ -132,7 +132,7 @@ class MultitaskBERT(nn.Module):
             nn.Dropout(config.hidden_dropout_prob),
             nn.Linear(512, 1),
         )'''
-        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size * 2)
+        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
 
         # Cosine Implementation
         # self.sts_classifier = nn.Sequential(
@@ -202,9 +202,9 @@ class MultitaskBERT(nn.Module):
         att_1 = self.sts_classifier(att_1)
         att_2 = self.sts_classifier(att_2)
 
-        input_cos = F.cosine_similarity(att_1, att_2)
+        input_cos = torch.nn.functional.cosine_similarity(att_1, att_2)
 
-        input_cos = 5 * torch.sigmoid(5 * input_cos)
+        input_cos = 5 * torch.sigmoid(input_cos)
 
         return input_cos
 
