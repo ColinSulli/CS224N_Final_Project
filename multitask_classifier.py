@@ -217,8 +217,10 @@ def train(batch, device, optimizer, model, type):
             logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
             logits = logits.to(torch.float)
 
-            loss = F.cross_entropy(logits, b_labels.to(torch.float).view(-1), reduction='mean')
-            #loss = nn.MSELoss(reduction="mean")(logits, b_labels.to(torch.float).view(-1))
+            print(b_labels.to(torch.float))
+
+            #loss = F.cross_entropy(logits, b_labels.to(torch.float).view(-1), reduction='mean')
+            loss = nn.MSELoss(reduction="mean")(logits, b_labels.to(torch.float).view(-1))
 
         loss.backward()
         optimizer.step()
@@ -255,8 +257,8 @@ def train_multitask(args):
                                     collate_fn=para_dev_data.collate_fn)
 
     # STS Data
-    sts_train_data = SentencePairDataset(sts_train_data, args)
-    sts_dev_data = SentencePairDataset(sts_dev_data, args)
+    sts_train_data = SentencePairDataset(sts_train_data, args, isRegression=True)
+    sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
     sts_train_dataloader = DataLoader(sts_train_data, shuffle=True, batch_size=args.batch_size,
                                        collate_fn=sts_train_data.collate_fn)
     sts_dev_dataloader = DataLoader(sts_dev_data, shuffle=False, batch_size=args.batch_size,
