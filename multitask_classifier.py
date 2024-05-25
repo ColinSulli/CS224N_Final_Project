@@ -79,7 +79,7 @@ class MultitaskBERT(nn.Module):
         # Para
         self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
         # SST
-        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
+        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size * 2)
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -154,7 +154,6 @@ class MultitaskBERT(nn.Module):
         input_cos = F.cosine_similarity(att_1, att_2)
 
         input_cos = 5 * torch.sigmoid(5 * input_cos)
-        #print(input_cos)
 
         return input_cos
 
