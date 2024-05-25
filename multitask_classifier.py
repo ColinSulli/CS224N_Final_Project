@@ -423,7 +423,7 @@ def train_multitask(rank, world_size, args):
             loop_size = 1800
 
         # Paraphrase training
-        for step in tqdm(range(loop_size), desc="para train", disable=TQDM_DISABLE):
+        '''for step in tqdm(range(loop_size), desc="para train", disable=TQDM_DISABLE):
             para_batch = next(cycle_para_loader)
             optimizer.zero_grad()
             para_training_loss = train(para_batch, device, model, "para")
@@ -451,7 +451,7 @@ def train_multitask(rank, world_size, args):
                 overall_steps = epoch * len(sst_train_dataloader) + step
                 summary_writer.add_scalar(
                     "sst_train_loss", sst_training_loss.item(), overall_steps
-                )
+                )'''
 
         # STS training
         for step, sts_batch in enumerate(
@@ -507,8 +507,8 @@ def train_multitask(rank, world_size, args):
                 best_overall_accuracy = overall_accuracy
 
         sts_train_loss = sts_train_loss / sts_num_batches
-        para_train_loss = para_train_loss / para_num_batches
-        sst_train_loss = sst_train_loss / sst_num_batches
+        para_train_loss = 0#para_train_loss / para_num_batches
+        sst_train_loss = 0#sst_train_loss / sst_num_batches
 
         p_print(
             f"Epoch {epoch}: Rank: {rank} sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, sst dev acc :: {sst_dev_acc :.3f}, para dev acc :: {para_dev_acc :.3f}, sts dev corr :: {sts_dev_corr :.3f}"
