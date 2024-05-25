@@ -144,6 +144,10 @@ class MultitaskBERT(nn.Module):
         att_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
         att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
+        # Apply Dropout
+        att_1 = self.dropout(att_1)
+        att_2 = self.dropout(att_2)
+
         att_1 = self.sts_classifier(att_1)
         att_2 = self.sts_classifier(att_2)
 
