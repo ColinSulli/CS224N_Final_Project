@@ -217,7 +217,7 @@ def train(batch, device, optimizer, model, type):
             logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
             logits = logits.to(torch.float)
 
-            print(b_labels.to(torch.float))
+            #print(b_labels.to(torch.float))
 
             #loss = F.cross_entropy(logits, b_labels.to(torch.float).view(-1), reduction='mean')
             loss = nn.MSELoss(reduction="mean")(logits, b_labels.to(torch.float).view(-1))
