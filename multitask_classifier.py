@@ -126,12 +126,13 @@ class MultitaskBERT(nn.Module):
 
         # SST: 6 class classification The similarity scores vary from 0 to 5
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Sequential(
-            nn.Linear(config.hidden_size * 2, 512),
+        '''self.sts_classifier = nn.Sequential(
+            nn.Linear(config.hidden_size, 512),
             nn.ELU(alpha=0.1),
             nn.Dropout(config.hidden_dropout_prob),
             nn.Linear(512, 1),
-        )
+        )'''
+        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
 
         # Cosine Implementation
         # self.sts_classifier = nn.Sequential(
@@ -194,6 +195,14 @@ class MultitaskBERT(nn.Module):
         output_1 = self.forward(input_ids_1, attention_mask_1)["pooler_output"]
         output_2 = self.forward(input_ids_2, attention_mask_2)["pooler_output"]
 
+        output_1 = self.sts_classifier(output_1)
+        output_2 = self.sts_classifier(output_2)
+
+        cos_sim = torch.nn.functional.cosine_similarity(output_1, output_2, dim=-1)
+        return 5 * torch.sigmoid(5 * cos_sim) # cover larger range all values between 0 and 1
+
+        '''print(output_1.shape)
+
         # dimension
         output_cat = torch.cat((output_1, output_2), dim=1)
         output = self.dropout(output_cat)
@@ -209,7 +218,7 @@ class MultitaskBERT(nn.Module):
         # logits = F.cosine_similarity(proj_1, proj_2, dim=1).squeeze()
         # logits = (logits + 1) * 2.5
 
-        return logits
+        return logits'''
 
 
 def save_model(model, optimizer, args, config, filepath):
