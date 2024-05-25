@@ -67,7 +67,7 @@ def model_eval_multitask(sentiment_dataloader,
         if arg == 'sst' or arg == 'all':
             for step, batch in enumerate(tqdm(sentiment_dataloader, desc=f'sst eval', disable=TQDM_DISABLE)):
                 b_ids, b_mask, b_labels, b_sent_ids = batch['token_ids'], batch['attention_mask'], batch['labels'], batch['sent_ids']
-
+                break;
                 b_ids = b_ids.to(device)
                 b_mask = b_mask.to(device)
 
@@ -92,7 +92,7 @@ def model_eval_multitask(sentiment_dataloader,
                  b_labels, b_sent_ids) = (batch['token_ids_1'], batch['attention_mask_1'],
                               batch['token_ids_2'], batch['attention_mask_2'],
                               batch['labels'], batch['sent_ids'])
-
+                break
                 b_ids1 = b_ids1.to(device)
                 b_mask1 = b_mask1.to(device)
                 b_ids2 = b_ids2.to(device)
