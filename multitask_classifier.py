@@ -192,35 +192,21 @@ class MultitaskBERT(nn.Module):
         """Given a batch of pairs of sentences, outputs a single logit corresponding to how similar they are.
         Note that your output should be unnormalized (a logit).
         """
-        output_1 = self.forward(input_ids_1, attention_mask_1)["pooler_output"]
-        output_2 = self.forward(input_ids_2, attention_mask_2)["pooler_output"]
+        att_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
+        att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
-        output_1 = self.sts_classifier(output_1)
-        output_2 = self.sts_classifier(output_2)
+        # Apply Dropout
+        att_1 = self.dropout(att_1)
+        att_2 = self.dropout(att_2)
 
-        cos_sim = torch.nn.functional.cosine_similarity(output_1, output_2)
-        print(5 * torch.sigmoid(5 * cos_sim))
-        return 5 * torch.sigmoid(5 * cos_sim) # cover larger range all values between 0 and 1
+        att_1 = self.sts_classifier(att_1)
+        att_2 = self.sts_classifier(att_2)
 
-        '''print(output_1.shape)
+        input_cos = F.cosine_similarity(att_1, att_2)
 
-        # dimension
-        output_cat = torch.cat((output_1, output_2), dim=1)
-        output = self.dropout(output_cat)
-        logits = self.sts_classifier(output).squeeze()
-        # scale it between 0 and 5 so that we can calculate MSE
-        logits = 5 * torch.sigmoid(logits)
+        input_cos = 5 * torch.sigmoid(5 * input_cos)
 
-        # cosine implementation
-        # output_1 = self.dropout(output_1)
-        # output_2 = self.dropout(output_2)
-        # proj_1 = self.sts_classifier(output_1)
-        # proj_2 = self.sts_classifier(output_2)
-        # logits = F.cosine_similarity(proj_1, proj_2, dim=1).squeeze()
-        # logits = (logits + 1) * 2.5
-
-        return logits'''
-
+        return input_cos
 
 def save_model(model, optimizer, args, config, filepath):
     save_info = {
