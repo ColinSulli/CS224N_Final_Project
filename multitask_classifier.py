@@ -155,8 +155,6 @@ class MultitaskBERT(nn.Module):
 
         input_cos = 5 * torch.sigmoid(input_cos)
 
-        #print(input_cos)
-
         return input_cos
 
 def save_model(model, optimizer, args, config, filepath):
