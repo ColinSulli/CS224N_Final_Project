@@ -79,7 +79,7 @@ class MultitaskBERT(nn.Module):
         # Para
         self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
         # SST
-        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size * 2)
+        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -153,7 +153,9 @@ class MultitaskBERT(nn.Module):
 
         input_cos = F.cosine_similarity(att_1, att_2)
 
-        input_cos = 5 * torch.sigmoid(5 * input_cos)
+        input_cos = 5 * torch.sigmoid(input_cos)
+
+        #print(input_cos)
 
         return input_cos
 
@@ -220,7 +222,7 @@ def train(batch, device, optimizer, model, type):
             #print(b_labels.to(torch.float))
 
             #loss = F.cross_entropy(logits, b_labels.to(torch.float).view(-1), reduction='mean')
-            loss = nn.MSELoss(reduction="mean")(logits, b_labels.to(torch.float).view(-1))
+            loss = nn.MSELoss(reduction="mean")(logits, b_labels.to(torch.float))
 
         loss.backward()
         optimizer.step()
