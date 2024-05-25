@@ -149,8 +149,7 @@ class MultitaskBERT(nn.Module):
 
         input_cos = F.cosine_similarity(att_1, att_2)
 
-        input_cos[:] += 1
-        input_cos[:] *= 2.5
+        input_cos = 5 * torch.sigmoid(5 * input_cos)
         #print(input_cos)
 
         return input_cos
