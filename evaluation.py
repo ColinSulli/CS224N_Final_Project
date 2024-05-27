@@ -45,6 +45,23 @@ def model_eval_sst(dataloader, model, device):
 
     return acc, f1, y_pred, y_true, sents, sent_ids
 
+def eval_cse():
+    # read in SNLI dataset
+    snli = load_dataset('snli')
+    snli_train_data = SNLIDataset(snli['test'], args)
+    snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=15,
+                                       collate_fn=snli_train_data.collate_fn)
+    for step, batch in enumerate(tqdm(snli_train_dataloader, desc=f'eval', disable=TQDM_DISABLE)):
+        (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2, token_type_ids_2, attention_mask_2, labels) = \
+            (snli_batch['token_ids_1'], snli_batch['token_type_ids_1'], snli_batch['attention_mask_1'],
+             snli_batch['token_ids_2'],
+             snli_batch['token_type_ids_2'], snli_batch['attention_mask_2'], snli_batch['labels'])
+
+        logits = model.predict_similarity(b_ids1, b_mask1, b_ids2, b_mask2)
+        y_hat = logits.flatten().cpu().numpy()
+        b_labels = b_labels.flatten().cpu().numpy()
+
+
 
 # Evaluate multitask model on dev sets.
 def model_eval_multitask(sentiment_dataloader,

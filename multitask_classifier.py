@@ -168,7 +168,7 @@ class MultitaskBERT(nn.Module):
             # increament batch_itr
             batch_itr = batch_itr + 1
 
-            if(batch_itr == 200):
+            if(batch_itr == 10000):
                 break
 
             token_ids_1 = token_ids_1.to(device)
