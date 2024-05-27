@@ -212,7 +212,7 @@ class MultitaskBERT(nn.Module):
                 unique_index.append(sum)
                 sum = sum + batch_sizes[batch_itr]
                 batch_itr = batch_itr + 1
-
+            unique_index.to(device)
             temperature = 0.05
 
             #print(hypothesis)
