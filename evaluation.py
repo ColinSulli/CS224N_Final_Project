@@ -62,6 +62,15 @@ def eval_cse(snli_train_dataloader, model, device):
             print("ERROR")
             continue
 
+        token_ids_1 = token_ids_1.to(device)
+        token_type_ids_1 = token_type_ids_1.to(device)
+        attention_mask_1 = attention_mask_1.to(device)
+        token_ids_2 = token_ids_2.to(device)
+        token_type_ids_2 = token_type_ids_2.to(device)
+        attention_mask_2 = attention_mask_2.to(device)
+        labels = labels.to(device)
+
+
         logits = model.predict_cse(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
         logits = torch.round(logits)
         y_hat = logits.detach().cpu().numpy()
