@@ -331,10 +331,11 @@ def train_multitask(rank, world_size, args):
         device = torch.device("cpu")
 
     if rank == 0:
-        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-complex-repr-trimmed-para-per-epoch-final"
+        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-pal"
         summary_writer = SummaryWriter(f"runs/{run_name}")
         p_print(f"\n\n\n*** Train multitask {run_name} ***")
         p_print("device: {}, debug: {}".format(device, DEBUG))
+        p_print("args: ", args)
 
     use_multi_gpu = False
     if world_size > 1:
@@ -639,7 +640,7 @@ def get_args():
         "--batch_size",
         help="sst: 64, cfimdb: 8 can fit a 12GB GPU",
         type=int,
-        default=32,
+        default=16,
     )
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.3)
     parser.add_argument("--lr", type=float, help="learning rate", default=1e-5)
