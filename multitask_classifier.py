@@ -24,13 +24,16 @@ from bert import BertModel
 from optimizer import AdamW
 from tqdm import tqdm
 
-from datasets import (
+from datasets_default import (
     SentenceClassificationDataset,
     SentenceClassificationTestDataset,
     SentencePairDataset,
+    SNLIDataset,
     SentencePairTestDataset,
-    load_multitask_data
+    load_multitask_data,
 )
+
+from datasets import load_dataset
 
 from evaluation import model_eval_sst, model_eval_multitask, model_eval_test_multitask
 
@@ -80,6 +83,7 @@ class MultitaskBERT(nn.Module):
         self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
         # SST
         self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
+        self.simcse_classifier = nn.Linear(config.hidden_size, config.hidden_size)
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -132,6 +136,81 @@ class MultitaskBERT(nn.Module):
 
         return logits
 
+    def train_similarity(self, args, device, optimizer):
+        # read in SNLI dataset
+        snli = load_dataset('snli')
+        snli_train_data = SNLIDataset(snli['train'], args)
+
+        batch_sizes = []
+        previous_premise = ""
+        current_batch_size = 0
+        for line in snli_train_data:
+            if(line['premise'] == previous_premise or previous_premise == ""):
+                previous_premise = line['premise']
+                current_batch_size = current_batch_size + 1
+            else:
+                batch_sizes.append(current_batch_size)
+                previous_premise = line['premise']
+                current_batch_size = 1
+
+        batch_itr = 0
+        ### IMPORTANT: batch size must be multiple of 3! ###
+        snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=15,
+                                           collate_fn=snli_train_data.collate_fn)
+
+        for snli_batch in tqdm(snli_train_dataloader, desc=f'SNLI-Train', disable=TQDM_DISABLE):
+            # read in data for each batch
+            (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2, token_type_ids_2, attention_mask_2, labels) = \
+                (snli_batch['token_ids_1'], snli_batch['token_type_ids_1'], snli_batch['attention_mask_1'], snli_batch['token_ids_2'],
+                 snli_batch['token_type_ids_2'], snli_batch['attention_mask_2'], snli_batch['labels'])
+            # increament batch_itr
+            batch_itr = batch_itr + 1
+
+            if(batch_itr == 200):
+                break
+
+            token_ids_1 = token_ids_1.to(device)
+            token_type_ids_1 = token_ids_1.to(device)
+            attention_mask_1 = attention_mask_1.to(device)
+            token_ids_2 = token_ids_2.to(device)
+            token_type_ids_2 = token_type_ids_2.to(device)
+            attention_mask_2 = attention_mask_2.to(device)
+
+            # get embeddings
+            premise = self.forward(token_ids_1, attention_mask_1)['pooler_output']
+            hypothesis = self.forward(token_ids_2, attention_mask_2)['pooler_output']
+
+            # Apply Dropout
+            premise = self.dropout(premise)
+            hypothesis = self.dropout(hypothesis)
+
+            premise = self.simcse_classifier(premise)
+            hypothesis = self.simcse_classifier(hypothesis)
+
+            # calculate loss
+
+            '''h_i = premise.masked_fill(labels > 0, float('-inf'))
+            h_i_plus = hypothesis.masked_fill(labels > 0, float('-inf'))
+            h_j_plus = hypothesis.masked_fill(labels > 0, float('-inf'))
+            h_j_neg = hypothesis.masked_fill(labels < 2, float('-inf'))'''
+
+            temperature = 0.05
+            logits = torch.exp(F.cosine_similarity(premise, hypothesis,dim=-1) / temperature)
+            logits = nn.Softmax(dim=-1)(logits)
+            logits = -1 * torch.log(logits)
+            #denominator = torch.exp((F.cosine_similarity(premise[0,:], hypothesis[0,:],dim=-1) / temperature) + (F.cosine_similarity(premise[1,:], hypothesis[1,:],dim=-1) / temperature))
+
+           # logits = torch.div(numerator, denominator)
+            #print(logits)
+
+            #print(logits.shape)
+            #print(labels.shape)
+
+            loss = F.cross_entropy(logits, labels.to(torch.float).view(-1), reduction='mean')
+            loss.backward()
+            optimizer.step()
+
+        return "DONE"
 
     def predict_similarity(self,
                            input_ids_1, attention_mask_1,
@@ -148,8 +227,10 @@ class MultitaskBERT(nn.Module):
         att_1 = self.dropout(att_1)
         att_2 = self.dropout(att_2)
 
-        att_1 = self.sts_classifier(att_1)
-        att_2 = self.sts_classifier(att_2)
+        #att_1 = self.sts_classifier(att_1)
+        #att_2 = self.sts_classifier(att_2)
+        att_1 = self.simcse_classifier(att_1)
+        att_2 = self.simcse_classifier(att_2)
 
         input_cos = F.cosine_similarity(att_1, att_2)
 
@@ -214,16 +295,18 @@ def train(batch, device, optimizer, model, type):
         elif type == 'sts':
             optimizer.zero_grad()
 
-            logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-            logits = logits.to(torch.float)
+            test = model.train_similarity(args, device, optimizer)
+            loss = 1
+            #logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+            #logits = logits.to(torch.float)
 
             #print(b_labels.to(torch.float))
 
             #loss = F.cross_entropy(logits, b_labels.to(torch.float).view(-1), reduction='mean')
-            loss = nn.MSELoss(reduction="mean")(logits, b_labels.to(torch.float))
+            #loss = nn.MSELoss(reduction="mean")(logits, b_labels.to(torch.float))
 
-        loss.backward()
-        optimizer.step()
+        #loss.backward()
+        #optimizer.step()
 
     return loss
 
@@ -263,6 +346,21 @@ def train_multitask(args):
                                        collate_fn=sts_train_data.collate_fn)
     sts_dev_dataloader = DataLoader(sts_dev_data, shuffle=False, batch_size=args.batch_size,
                                      collate_fn=sts_dev_data.collate_fn)
+    #SNLI
+    #snli = load_dataset('snli')
+
+    # snli_test_data = SNLIDataset(snli['test'], args)
+    # snli_validation_data = SNLIDataset(snli['validation'], args)
+    #snli_train_data = SNLIDataset(snli['train'], args)
+
+    #snli_train_data.collate_fn(snli_train_data)
+
+    '''snli_test_dataloader = DataLoader(snli_test_data, shuffle=False, batch_size=args.batch_size,
+                                      collate_fn=snli_test_data.collate_fn)
+    snli_validation_dataloader = DataLoader(snli_validation_data, shuffle=False, batch_size=args.batch_size,
+                                            collate_fn=snli_validation_data.collate_fn)'''
+    #snli_train_dataloader = DataLoader(snli_train_data, shuffle=True, batch_size=args.batch_size,
+     #                                  collate_fn=snli_train_data.collate_fn(snli_train_data))
 
     # Init model.
     config = {'hidden_dropout_prob': args.hidden_dropout_prob,
@@ -306,9 +404,10 @@ def train_multitask(args):
                 sts_train_loss += sts_train_loss
                 sts_num_batches += 1
                 sts_train_loss = sts_train_loss / sts_num_batches
+                break
 
-    train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device, args.train)
-    dev_acc, dev_f1, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device, args.train)
+        train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device, args.train)
+        dev_acc, dev_f1, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device, args.train)
 
     if dev_acc > best_dev_acc:
         best_dev_acc = dev_acc

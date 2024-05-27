@@ -13,6 +13,8 @@ import csv
 import torch
 from torch.utils.data import Dataset
 from tokenizer import BertTokenizer
+import operator
+from functools import reduce
 
 
 def preprocess_string(s):
@@ -151,6 +153,69 @@ class SentencePairDataset(Dataset):
                 'attention_mask_2': attention_mask2,
                 'labels': labels,
                 'sent_ids': sent_ids
+            }
+
+        return batched_data
+
+
+class SNLIDataset(Dataset):
+    def __init__(self, dataset, args):
+        self.dataset = dataset
+        self.p = args
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        return self.dataset[idx]
+
+    def pad_data(self, data):
+        # we are ignoring all neutral labels for now
+        '''premise_entail = [x['premise'] for x in data if x['label'] == 0]
+        hypothesis_entail = [x['hypothesis'] for x in data if x['label'] == 0]
+        labels_entail = [x['label'] for x in data if x['label'] == 0]
+
+        premise_contradict = [x['premise'] for x in data if x['label'] == 2]
+        hypothesis_contradict = [x['hypothesis'] for x in data if x['label'] == 2]
+        labels_contradict = [x['label'] for x in data if x['label'] == 2]
+
+        premise = reduce(operator.add, zip(premise_entail, premise_contradict))
+        hypothesis = reduce(operator.add, zip(hypothesis_entail, hypothesis_contradict))
+        labels = reduce(operator.add, zip(labels_entail, labels_contradict))'''
+
+        premise = [x['premise'] for x in data if x['label'] != 1]
+        hypothesis = [x['hypothesis'] for x in data if x['label'] != 1]
+        labels = [x['label'] for x in data if x['label'] != 1]
+
+        encoding1 = self.tokenizer(premise, return_tensors='pt', padding=True, truncation=True)
+        encoding2 = self.tokenizer(hypothesis, return_tensors='pt', padding=True, truncation=True)
+
+        token_ids = torch.LongTensor(encoding1['input_ids'])
+        attention_mask = torch.LongTensor(encoding1['attention_mask'])
+        token_type_ids = torch.LongTensor(encoding1['token_type_ids'])
+
+        token_ids2 = torch.LongTensor(encoding2['input_ids'])
+        attention_mask2 = torch.LongTensor(encoding2['attention_mask'])
+        token_type_ids2 = torch.LongTensor(encoding2['token_type_ids'])
+        labels = torch.LongTensor(labels)
+
+        return (token_ids, token_type_ids, attention_mask,
+                token_ids2, token_type_ids2, attention_mask2,
+                labels)
+
+    def collate_fn(self, all_data):
+        (token_ids, token_type_ids, attention_mask,
+         token_ids2, token_type_ids2, attention_mask2,
+         labels) = self.pad_data(all_data)
+        batched_data = {
+                'token_ids_1': token_ids,
+                'token_type_ids_1': token_type_ids,
+                'attention_mask_1': attention_mask,
+                'token_ids_2': token_ids2,
+                'token_type_ids_2': token_type_ids2,
+                'attention_mask_2': attention_mask2,
+                'labels': labels,
             }
 
         return batched_data
