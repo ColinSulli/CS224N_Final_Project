@@ -41,8 +41,8 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
     para_dev_data = SentencePairDataset(para_dev_data, args)
 
     # STS Data
-    sts_train_data = SentencePairDataset(sts_train_data, args)
-    sts_dev_data = SentencePairDataset(sts_dev_data, args)
+    sts_train_data = SentencePairDataset(sts_train_data, args, isRegression=True)
+    sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
 
     # Configuration for each data set
     # format: name, data, batch_size, shuffle
