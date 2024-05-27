@@ -41,8 +41,8 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
     para_dev_data = SentencePairDataset(para_dev_data, args)
 
     # STS Data
-    sts_train_data = SentencePairDataset(sts_train_data, args, isRegression=True, task='sts')
-    sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True, task='sts')
+    sts_train_data = SentencePairDataset(sts_train_data, args, isRegression=True)
+    sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
 
     # Configuration for each data set
     # format: name, data, batch_size, shuffle
@@ -103,7 +103,7 @@ def data_loaders_for_test(args, use_multi_gpu=False, debug=False):
     para_dev_data = SentencePairDataset(para_dev_data, args)
 
     sts_test_data = SentencePairTestDataset(sts_test_data, args)
-    sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True, task='sts')
+    sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
 
     datasets = [
         ("sst_test", sst_test_data, args.batch_size, True),

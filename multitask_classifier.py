@@ -113,7 +113,7 @@ class MultitaskBERT(nn.Module):
         assert len(config.sentiment_labels) == 5
         self.sst_classifier = nn.Linear(config.hidden_size, 5)
 
-        # SST: 6 class classification The similarity scores vary from 0 to 5
+        # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
         self.sts_classifier = nn.Linear(config.hidden_size, 1)
 
@@ -170,7 +170,10 @@ class MultitaskBERT(nn.Module):
             input_ids, token_type_ids, attention_mask, self.task_ids["sts"]
         )
 
-        logits = self.sts_classifier(output).squeeze()
+        logits = self.sts_classifier(output)
+
+        # normalise between 0 to 5
+        logits = torch.sigmoid(logits).squeeze() * 5.0
 
         # we are using MSELoss, so no need to put sigmoid here
         return logits

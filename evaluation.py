@@ -121,7 +121,7 @@ def model_eval_multitask(sentiment_dataloader,
                 b_token_type_ids = b_token_type_ids.to(device)
                 
                 logits = model.predict_similarity(b_ids, b_token_type_ids, b_mask)
-                y_hat = [min(max(0., pred * 1.), 1.) for pred in logits]
+                y_hat = logits.flatten().cpu().numpy()
 
                 b_labels = b_labels.flatten().cpu().numpy()
 
@@ -196,7 +196,7 @@ def model_eval_test_multitask(sentiment_dataloader,
             b_token_type_ids = b_token_type_ids.to(device)
             
             logits = model.predict_similarity(b_ids, b_token_type_ids, b_mask)
-            y_hat = [min(max(0., pred * 1.), 1.) for pred in logits]
+            y_hat = logits.flatten().cpu().numpy()
 
             sts_y_pred.extend(y_hat)
             sts_sent_ids.extend(b_sent_ids)

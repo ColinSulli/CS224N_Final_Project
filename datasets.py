@@ -106,12 +106,11 @@ class SentenceClassificationTestDataset(Dataset):
 
 
 class SentencePairDataset(Dataset):
-    def __init__(self, dataset, args, isRegression=False, max_sequence_length=128, task=None):
+    def __init__(self, dataset, args, isRegression=False, max_sequence_length=128):
         self.dataset = dataset
         self.p = args
         self.isRegression = isRegression 
         self.max_sequence_length = max_sequence_length
-        self.task = task
         self.tokenizer = tokenization.FullTokenizer(
                 vocab_file='uncased_L-12_H-768_A-12/vocab.txt', do_lower_case=True)
 
