@@ -112,7 +112,8 @@ class SentencePairDataset(Dataset):
         self.isRegression = isRegression 
         self.max_sequence_length = max_sequence_length
         self.task = task
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        self.tokenizer = tokenization.FullTokenizer(
+                vocab_file='uncased_L-12_H-768_A-12/vocab.txt', do_lower_case=True)
 
     def __len__(self):
         return len(self.dataset)
@@ -137,12 +138,9 @@ class SentencePairDataset(Dataset):
             sent2 = training_case[1]
             label = training_case[2]
             sent_id = training_case[3]
-
-            tokenizer = tokenization.FullTokenizer(
-                vocab_file='uncased_L-12_H-768_A-12/vocab.txt', do_lower_case=True)
         
-            tokens_1 = tokenizer.tokenize(sent1)
-            tokens_2 = tokenizer.tokenize(sent2)
+            tokens_1 = self.tokenizer.tokenize(sent1)
+            tokens_2 = self.tokenizer.tokenize(sent2)
 
             # Modifies `tokens_a` and `tokens_b` in place so that the total
             # length is less than the specified length.
@@ -165,7 +163,7 @@ class SentencePairDataset(Dataset):
             tokens.append("[SEP]")
             segment_ids.append(1)
 
-            input_ids = tokenizer.convert_tokens_to_ids(tokens)
+            input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
 
             # The mask has 1 for real tokens and 0 for padding tokens. Only real
             # tokens are attended to.
@@ -181,14 +179,6 @@ class SentencePairDataset(Dataset):
             assert len(input_mask) == self.max_sequence_length
             assert len(segment_ids) == self.max_sequence_length
 
-            if self.task == "sts":
-                # normalise the labels to be between 0 and 1 so that we don't need to take
-                # sigmoid in the loss function
-                # inspired from BERT PAL implementation
-                label = float(label) / 5.0
-
-            # append the features
-            
             token_ids[index] = torch.Tensor(input_ids)
             token_type_ids[index] = torch.Tensor(segment_ids)
             attention_mask[index] = torch.Tensor(input_mask)
@@ -217,7 +207,8 @@ class SentencePairTestDataset(Dataset):
         self.dataset = dataset
         self.p = args
         self.max_sequence_length = max_sequence_length
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        self.tokenizer = tokenization.FullTokenizer(
+                vocab_file='uncased_L-12_H-768_A-12/vocab.txt', do_lower_case=True)
 
     def __len__(self):
         return len(self.dataset)
@@ -236,12 +227,9 @@ class SentencePairTestDataset(Dataset):
             sent1 = testing_case[0]
             sent2 = testing_case[1]
             sent_id = testing_case[2]
-
-            tokenizer = tokenization.FullTokenizer(
-                vocab_file='uncased_L-12_H-768_A-12/vocab.txt', do_lower_case=True)
         
-            tokens_1 = tokenizer.tokenize(sent1)
-            tokens_2 = tokenizer.tokenize(sent2)
+            tokens_1 = self.tokenizer.tokenize(sent1)
+            tokens_2 = self.tokenizer.tokenize(sent2)
 
             # Modifies `tokens_a` and `tokens_b` in place so that the total
             # length is less than the specified length.
@@ -264,7 +252,7 @@ class SentencePairTestDataset(Dataset):
             tokens.append("[SEP]")
             segment_ids.append(1)
 
-            input_ids = tokenizer.convert_tokens_to_ids(tokens)
+            input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
 
             # The mask has 1 for real tokens and 0 for padding tokens. Only real
             # tokens are attended to.
