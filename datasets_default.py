@@ -188,6 +188,17 @@ class SNLIDataset(Dataset):
         hypothesis = [x['hypothesis'] for x in data]
         labels = [x['label'] for x in data]
 
+        #print(labels)
+
+        labels = [x * 5 for x in labels]
+        #print(labels)
+        labels = [1 if x == 0 else x for x in labels]
+        #print(labels)
+        labels = [0 if x == 5 or x == 10 else x for x in labels]
+        #print(labels)
+
+        #print(labels)
+
         encoding1 = self.tokenizer(premise, return_tensors='pt', padding=True, truncation=True)
         encoding2 = self.tokenizer(hypothesis, return_tensors='pt', padding=True, truncation=True)
 
