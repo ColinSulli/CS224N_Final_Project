@@ -11,6 +11,8 @@ import torch
 from sklearn.metrics import f1_score, accuracy_score
 from tqdm import tqdm
 import numpy as np
+from datasets import load_dataset
+from datasets_default import SNLIDataset
 
 
 TQDM_DISABLE = False
@@ -45,23 +47,37 @@ def model_eval_sst(dataloader, model, device):
 
     return acc, f1, y_pred, y_true, sents, sent_ids
 
-def eval_cse():
-    # read in SNLI dataset
-    snli = load_dataset('snli')
-    snli_train_data = SNLIDataset(snli['test'], args)
-    snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=15,
-                                       collate_fn=snli_train_data.collate_fn)
-    for step, batch in enumerate(tqdm(snli_train_dataloader, desc=f'eval', disable=TQDM_DISABLE)):
-        (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2, token_type_ids_2, attention_mask_2, labels) = \
-            (snli_batch['token_ids_1'], snli_batch['token_type_ids_1'], snli_batch['attention_mask_1'],
-             snli_batch['token_ids_2'],
-             snli_batch['token_type_ids_2'], snli_batch['attention_mask_2'], snli_batch['labels'])
+def eval_cse(snli_train_dataloader, model, device):
+    cse_y_pred = []
+    cse_y_true = []
 
-        logits = model.predict_similarity(b_ids1, b_mask1, b_ids2, b_mask2)
-        y_hat = logits.flatten().cpu().numpy()
-        b_labels = b_labels.flatten().cpu().numpy()
+    for step, snli_batch in enumerate(tqdm(snli_train_dataloader, desc=f'eval', disable=TQDM_DISABLE)):
+        (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2, token_type_ids_2, attention_mask_2, labels) = None,None,None,None,None,None,None
+        try:
+            (token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2, token_type_ids_2, attention_mask_2, labels) = \
+                (snli_batch['token_ids_1'], snli_batch['token_type_ids_1'], snli_batch['attention_mask_1'],
+                 snli_batch['token_ids_2'],
+                 snli_batch['token_type_ids_2'], snli_batch['attention_mask_2'], snli_batch['labels'])
+        except NameError:
+            print("ERROR")
+            continue
 
+        logits = model.predict_cse(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+        logits = torch.round(logits)
+        y_hat = logits.detach().cpu().numpy()
+        #labels = torch.sigmoid(labels)
+        labels = labels / 2
+        labels = labels.flatten().cpu().numpy()
 
+        cse_y_pred.extend(y_hat)
+        cse_y_true.extend(labels)
+
+        #print("PREDICT ", y_hat)
+        #print("LABELS ", labels)
+
+    sentiment_accuracy = np.mean(np.array(cse_y_pred) == np.array(cse_y_true))
+
+    return sentiment_accuracy
 
 # Evaluate multitask model on dev sets.
 def model_eval_multitask(sentiment_dataloader,

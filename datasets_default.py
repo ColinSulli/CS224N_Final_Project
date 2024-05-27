@@ -184,9 +184,9 @@ class SNLIDataset(Dataset):
         hypothesis = reduce(operator.add, zip(hypothesis_entail, hypothesis_contradict))
         labels = reduce(operator.add, zip(labels_entail, labels_contradict))'''
 
-        premise = [x['premise'] for x in data if x['label'] != 1]
-        hypothesis = [x['hypothesis'] for x in data if x['label'] != 1]
-        labels = [x['label'] for x in data if x['label'] != 1]
+        premise = [x['premise'] for x in data]
+        hypothesis = [x['hypothesis'] for x in data]
+        labels = [x['label'] for x in data]
 
         encoding1 = self.tokenizer(premise, return_tensors='pt', padding=True, truncation=True)
         encoding2 = self.tokenizer(hypothesis, return_tensors='pt', padding=True, truncation=True)

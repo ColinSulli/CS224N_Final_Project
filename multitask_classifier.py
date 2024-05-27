@@ -35,7 +35,7 @@ from datasets_default import (
 
 from datasets import load_dataset
 
-from evaluation import model_eval_sst, model_eval_multitask, model_eval_test_multitask
+from evaluation import model_eval_sst, model_eval_multitask, model_eval_test_multitask, eval_cse
 
 
 TQDM_DISABLE=False
@@ -157,7 +157,7 @@ class MultitaskBERT(nn.Module):
 
         batch_itr = 0
         ### IMPORTANT: batch size must be multiple of 3! ###
-        snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=15,
+        snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=3,
                                            collate_fn=snli_train_data.collate_fn)
 
         for snli_batch in tqdm(snli_train_dataloader, desc=f'SNLI-Train', disable=TQDM_DISABLE):
@@ -168,7 +168,7 @@ class MultitaskBERT(nn.Module):
             # increament batch_itr
             batch_itr = batch_itr + 1
 
-            if(batch_itr == 10000):
+            if(batch_itr == 1000):
                 break
 
             token_ids_1 = token_ids_1.to(device)
@@ -198,9 +198,15 @@ class MultitaskBERT(nn.Module):
             h_j_neg = hypothesis.masked_fill(labels < 2, float('-inf'))'''
 
             temperature = 0.05
-            logits = torch.exp(F.cosine_similarity(premise, hypothesis,dim=-1) / temperature)
+            logits = torch.exp(F.cosine_similarity(premise, hypothesis,dim=-1))
             logits = nn.Softmax(dim=-1)(logits)
-            logits = -1 * torch.log(logits)
+            #print(logits)
+            #print(labels)
+            logits = -torch.log(logits)
+            #logits = torch.sigmoid(logits)
+            #logits = torch.clamp(logits,min=1e-10)
+            #print(logits)
+            #exit()
             #denominator = torch.exp((F.cosine_similarity(premise[0,:], hypothesis[0,:],dim=-1) / temperature) + (F.cosine_similarity(premise[1,:], hypothesis[1,:],dim=-1) / temperature))
 
            # logits = torch.div(numerator, denominator)
@@ -214,6 +220,26 @@ class MultitaskBERT(nn.Module):
             optimizer.step()
 
         return "DONE"
+
+    def predict_cse(self,
+                    input_ids_1, attention_mask_1,
+                    input_ids_2, attention_mask_2):
+        '''Given a batch of pairs of sentences, outputs a single logit corresponding to how similar they are.
+        Note that your output should be unnormalized (a logit).
+        '''
+        ### TODO
+        # cosine similarity
+        att_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
+        att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
+
+        att_1 = self.simcse_classifier(att_1)
+        att_2 = self.simcse_classifier(att_2)
+
+        input_cos = F.cosine_similarity(att_1, att_2)
+
+        #input_cos = 5 * torch.sigmoid(input_cos)
+
+        return input_cos
 
     def predict_similarity(self,
                            input_ids_1, attention_mask_1,
@@ -409,7 +435,16 @@ def train_multitask(args):
                 sts_train_loss = sts_train_loss / sts_num_batches
                 break
 
-        train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device, args.train)
+        snli = load_dataset('snli')
+        snli_train_data = SNLIDataset(snli['test'], args)
+
+        snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=3,
+                                           collate_fn=snli_train_data.collate_fn)
+
+        cse_acc = eval_cse(snli_train_dataloader, model, device)
+        print("CSE ACC: ", cse_acc)
+
+        '''train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device, args.train)
         dev_acc, dev_f1, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device, args.train)
 
     if dev_acc > best_dev_acc:
@@ -417,7 +452,7 @@ def train_multitask(args):
         save_model(model, optimizer, args, config, args.filepath)
 
     print(
-        f"Epoch {epoch}: sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
+        f"Epoch {epoch}: sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")'''
 
 def test_multitask(args):
     '''Test and save predictions on the dev and test sets of all three tasks.'''
