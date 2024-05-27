@@ -128,7 +128,7 @@ def model_eval_multitask(sentiment_dataloader,
                 sts_y_pred.extend(y_hat)
                 sts_y_true.extend(b_labels)
                 sts_sent_ids.extend(b_sent_ids)
-            pearson_mat = np.corrcoef(sts_y_pred,sts_y_true)
+            pearson_mat = np.corrcoef(sts_y_pred, sts_y_true)
             sts_corr = pearson_mat[1][0]
 
         print(f'Sentiment classification accuracy: {sentiment_accuracy:.3f}')

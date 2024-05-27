@@ -125,10 +125,7 @@ class SentencePairDataset(Dataset):
         token_ids = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
         token_type_ids = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
         attention_mask = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
-        if self.isRegression:
-            labels = torch.zeros(batch_size, 1, dtype=torch.float32)
-        else:
-            labels = torch.zeros(batch_size, 1, dtype=torch.long)
+        labels = torch.zeros(batch_size, 1, dtype=torch.float32 if self.isRegression else torch.long)
         
         sent_ids = []
         
@@ -146,33 +143,16 @@ class SentencePairDataset(Dataset):
             # Account for [CLS], [SEP], [SEP] with "- 3"
             _truncate_seq_pair(tokens_1, tokens_2, self.max_sequence_length - 3)
 
-            tokens = []
-            segment_ids = []
-            tokens.append("[CLS]")
-            segment_ids.append(0)
-            for token in tokens_1:
-                tokens.append(token)
-                segment_ids.append(0)
-            tokens.append("[SEP]")
-            segment_ids.append(0)
-
-            for token in tokens_2:
-                tokens.append(token)
-                segment_ids.append(1)
-            tokens.append("[SEP]")
-            segment_ids.append(1)
+            tokens = ["[CLS]"] + tokens_1 + ["[SEP]"] + tokens_2 + ["[SEP]"]
+            segment_ids = [0] * (len(tokens_1) + 2) + [1] * (len(tokens_2) + 1)
+            input_mask = [1] * len(tokens)
 
             input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-
-            # The mask has 1 for real tokens and 0 for padding tokens. Only real
-            # tokens are attended to.
-            input_mask = [1] * len(input_ids)
-
-            # Zero-pad up to the sequence length without while loop
-            padding = [0] * (self.max_sequence_length - len(input_ids))
-            input_ids += padding
-            input_mask += padding
-            segment_ids += padding
+            
+            padding_length = self.max_sequence_length - len(tokens)
+            input_ids.extend([0] * padding_length)
+            segment_ids.extend([0] * padding_length)
+            input_mask.extend([0] * padding_length)
 
             assert len(input_ids) == self.max_sequence_length
             assert len(input_mask) == self.max_sequence_length
@@ -235,33 +215,16 @@ class SentencePairTestDataset(Dataset):
             # Account for [CLS], [SEP], [SEP] with "- 3"
             _truncate_seq_pair(tokens_1, tokens_2, self.max_sequence_length - 3)
 
-            tokens = []
-            segment_ids = []
-            tokens.append("[CLS]")
-            segment_ids.append(0)
-            for token in tokens_1:
-                tokens.append(token)
-                segment_ids.append(0)
-            tokens.append("[SEP]")
-            segment_ids.append(0)
-
-            for token in tokens_2:
-                tokens.append(token)
-                segment_ids.append(1)
-            tokens.append("[SEP]")
-            segment_ids.append(1)
+            tokens = ["[CLS]"] + tokens_1 + ["[SEP]"] + tokens_2 + ["[SEP]"]
+            segment_ids = [0] * (len(tokens_1) + 2) + [1] * (len(tokens_2) + 1)
+            input_mask = [1] * len(tokens)
 
             input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-
-            # The mask has 1 for real tokens and 0 for padding tokens. Only real
-            # tokens are attended to.
-            input_mask = [1] * len(input_ids)
-
-            # Zero-pad up to the sequence length without while loop
-            padding = [0] * (self.max_sequence_length - len(input_ids))
-            input_ids += padding
-            input_mask += padding
-            segment_ids += padding
+            
+            padding_length = self.max_sequence_length - len(tokens)
+            input_ids.extend([0] * padding_length)
+            segment_ids.extend([0] * padding_length)
+            input_mask.extend([0] * padding_length)
 
             assert len(input_ids) == self.max_sequence_length
             assert len(input_mask) == self.max_sequence_length
