@@ -72,7 +72,6 @@ def eval_cse(snli_train_dataloader, model, device):
 
 
         logits = model.predict_cse(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-        logits = torch.round(logits)
         y_hat = logits.detach().cpu().numpy()
         #labels = torch.sigmoid(labels)
         #labels = labels / 2
@@ -84,8 +83,8 @@ def eval_cse(snli_train_dataloader, model, device):
         if(step == 100):
             break
 
-        print("PREDICT ", y_hat)
-        print("LABELS ", labels)
+        #print("PREDICT ", y_hat)
+        #print("LABELS ", labels)
 
     sentiment_accuracy = np.mean(np.array(cse_y_pred) == np.array(cse_y_true))
 

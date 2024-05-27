@@ -168,7 +168,7 @@ class MultitaskBERT(nn.Module):
             # increament batch_itr
             batch_itr = batch_itr + 1
 
-            if(batch_itr == 1000):
+            if(batch_itr == 10000):
                 break
 
             token_ids_1 = token_ids_1.to(device)
@@ -198,12 +198,57 @@ class MultitaskBERT(nn.Module):
             h_j_neg = hypothesis.masked_fill(labels < 2, float('-inf'))'''
 
             temperature = 0.05
-            logits = torch.exp(F.cosine_similarity(premise, hypothesis,dim=-1))
-            logits = nn.Softmax(dim=-1)(logits)
+
+            #print(hypothesis)
+            #print(labels)
+
+            if torch.sum(labels) != 1:
+                continue
+
+            labels_true = labels.view(3,1)
+            hypothesis_true = torch.mul(hypothesis, labels_true)
+            filter = ~(hypothesis_true == 0).all(dim=1)
+            hypothesis_true = hypothesis_true[filter, :]
+
+
+            labels_false = 1 - labels
+            labels_false = labels_false.view(3,1)
+            hypothesis_false = torch.mul(hypothesis, labels_false)
+            #print(torch.mul(hypothesis, temp_labels))
+
+            numerator = torch.exp(F.cosine_similarity(premise[0,:], hypothesis_true,dim=-1)) / temperature
+
+            #print(numerator)
+
+
+            denominator = torch.exp(F.cosine_similarity(premise[0,:], hypothesis,dim=-1)) / temperature
+            denominator = torch.sum(denominator)
+            logits = -torch.log(numerator/denominator)
+
+            #print(logits)
+            loss = logits
+            '''exit()
+
+            logits = torch.sigmoid(logits)
+            logits = torch.round(logits)
+            logits = 1-logits'''
+            #logits = torch.clamp(logits,min=1e-10)
+            #print(logits)
+
+
+            '''mask = (hypothesis != 0).any(dim=0)
+            hypothesis = hypothesis[mask]
+            print(hypothesis)'''
+            #exit()
+
+            #logits = torch.exp(F.cosine_similarity(premise, hypothesis,dim=-1))
+            #logits = nn.Softmax(dim=-1)(logits)
             #print(logits)
             #print(labels)
-            logits = -torch.log(logits)
+            #logits = -torch.log(logits)
+            #logits = torch.round(logits)
             #logits = torch.sigmoid(logits)
+            #logits = torch.round(logits)
             #logits = torch.clamp(logits,min=1e-10)
             #print(logits)
             #exit()
@@ -215,7 +260,12 @@ class MultitaskBERT(nn.Module):
             #print(logits.shape)
             #print(labels.shape)
 
-            loss = F.cross_entropy(logits, labels.to(torch.float).view(-1), reduction='mean')
+            #print("LOGITS ", logits)
+            #print("LABELS ", labels)
+            #exit()
+
+            #loss = F.cross_entropy(logits, labels.to(torch.float).view(-1), reduction='mean')
+            print(loss)
             loss.backward()
             optimizer.step()
 
@@ -236,6 +286,8 @@ class MultitaskBERT(nn.Module):
         att_2 = self.simcse_classifier(att_2)
 
         input_cos = F.cosine_similarity(att_1, att_2)
+        input_cos = torch.round(input_cos)
+        #input_cos = torch.round(input_cos)
 
         #input_cos = 5 * torch.sigmoid(input_cos)
 
