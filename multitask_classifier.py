@@ -105,7 +105,7 @@ class MultitaskBERT(nn.Module):
         # Paraphrasing: Binary classification
         # we are concatenating the embeddings of the two sentences
         # and then passing them through a linear layer.
-        self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
+        self.para_classifier = nn.Linear(config.hidden_size, 1)
 
         # SST: 5 class classification
         # negative, somewhat negative, neutral, somewhat positive, or positive.
@@ -115,7 +115,7 @@ class MultitaskBERT(nn.Module):
 
         # SST: 6 class classification The similarity scores vary from 0 to 5
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Linear(config.hidden_size * 2, 1)
+        self.sts_classifier = nn.Linear(config.hidden_size, 1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
         "Takes a batch of sentences and produces embeddings for them."
@@ -127,30 +127,17 @@ class MultitaskBERT(nn.Module):
         # for now just returning bert embedding
         return self.bert.forward(input_ids, token_type_ids, attention_mask, task_id)
 
-    def predict_paraphrase(
-        self,
-        input_ids_1,
-        token_type_ids_1,
-        attention_mask_1,
-        input_ids_2,
-        token_type_ids_2,
-        attention_mask_2,
-    ):
+    def predict_paraphrase(self, input_ids, token_type_ids, attention_mask):
         """Given a batch of pairs of sentences, outputs a single logit for predicting whether they are paraphrases.
         Note that your output should be unnormalized (a logit); it will be passed to the sigmoid function
         during evaluation.
         """
         # concatenate inputs and attention masks
-        output_1 = self.forward(
-            input_ids_1, token_type_ids_1, attention_mask_1, self.task_ids["para"]
-        )
-        output_2 = self.forward(
-            input_ids_2, token_type_ids_2, attention_mask_2, self.task_ids["para"]
+        output = self.forward(
+            input_ids, token_type_ids, attention_mask, self.task_ids["para"]
         )
 
-        # classify
-        output_cat = torch.cat((output_1, output_2), dim=1)
-        logits = self.para_classifier(output_cat).squeeze()
+        logits = self.para_classifier(output).squeeze()
 
         # we are using BCEWithLogitLoss, so no need to put sigmoid here
         return logits
@@ -169,30 +156,21 @@ class MultitaskBERT(nn.Module):
             attention_mask,
             task_id=self.task_ids["sst"],
         )
-        logits = self.sst_classifier(pooler_output)
+        logits = self.sst_classifier(pooler_output).squeeze()
 
         # we are using CrossEntropyLoss, so no need to put softmax here
         return logits
 
-    def predict_similarity(
-        self, input_ids_1, token_type_ids_1, attention_mask_1, input_ids_2, token_type_ids_2, attention_mask_2
-    ):
+    def predict_similarity(self, input_ids, token_type_ids, attention_mask):
         """Given a batch of pairs of sentences, outputs a single logit corresponding to how similar they are.
         Note that your output should be unnormalized (a logit).
         """
         # concatenate inputs and attention masks
-        output_1 = self.forward(
-            input_ids_1, token_type_ids_1, attention_mask_1, self.task_ids["sts"]
-        )
-        output_2 = self.forward(
-            input_ids_2, token_type_ids_2, attention_mask_2, self.task_ids["sts"]
+        output = self.forward(
+            input_ids, token_type_ids, attention_mask, self.task_ids["sts"]
         )
 
-        output_cat = torch.cat((output_1, output_2), dim=1)
-        logits = self.sts_classifier(output_cat)
-
-        # normalise between 0 and 5
-        logits = (torch.sigmoid(logits) * 5).squeeze(1)
+        logits = self.sts_classifier(output).squeeze()
 
         # we are using MSELoss, so no need to put sigmoid here
         return logits
@@ -221,7 +199,7 @@ def train(batch, device, model, type):
         b_ids, b_token_type_ids, b_mask, b_labels = (
             batch["token_ids"],
             batch["attention_mask"],
-            batch['token_type_ids'],
+            batch["token_type_ids"],
             batch["labels"],
         )
         b_ids = b_ids.to(device)
@@ -229,85 +207,59 @@ def train(batch, device, model, type):
         b_mask = b_mask.to(device)
         b_labels = b_labels.to(device)
         logits = model.predict_sentiment(b_ids, b_token_type_ids, b_mask)
-        
+
         # logits dim: B, class_size. b_labels dim: B, (class indices)
         # expects un-normalised logits
         loss = nn.CrossEntropyLoss(reduction="mean")(logits, b_labels)
 
     elif type == "para":
         (
-            token_ids_1,
-            token_type_ids_1,
-            attention_mask_1,
-            token_ids_2,
-            token_type_ids_2,
-            attention_mask_2,
+            token_ids,
+            token_type_ids,
+            attention_mask,
             b_labels,
         ) = (
-            batch["token_ids_1"],
-            batch["token_type_ids_1"],
-            batch["attention_mask_1"],
-            batch["token_ids_2"],
-            batch["token_type_ids_2"],
-            batch["attention_mask_2"],
+            batch["token_ids"],
+            batch["token_type_ids"],
+            batch["attention_mask"],
             batch["labels"],
         )
 
-        token_ids_1 = token_ids_1.to(device)
-        token_type_ids_1 = token_type_ids_1.to(
+        token_ids = token_ids.to(device)
+        token_type_ids = token_type_ids.to(
             device
         )  # need to modify bert embedding to use this later
-        attention_mask_1 = attention_mask_1.to(device)
-
-        token_ids_2 = token_ids_2.to(device)
-        token_type_ids_2 = token_type_ids_2.to(
-            device
-        )  # need to modify bert embedding to use this later
-        attention_mask_2 = attention_mask_2.to(device)
+        attention_mask = attention_mask.to(device)
         b_labels = b_labels.type(torch.float32).to(device)
 
-        logits = model.predict_paraphrase(
-            token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2, token_type_ids_2, attention_mask_2
-        )
+        logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
+
         # logits dim: B, b_labels dim: B
         loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
 
     elif type == "sts":
         (
-            token_ids_1,
-            token_type_ids_1,
-            attention_mask_1,
-            token_ids_2,
-            token_type_ids_2,
-            attention_mask_2,
+            token_ids,
+            token_type_ids,
+            attention_mask,
             b_labels,
         ) = (
-            batch["token_ids_1"],
-            batch["token_type_ids_1"],
-            batch["attention_mask_1"],
-            batch["token_ids_2"],
-            batch["token_type_ids_2"],
-            batch["attention_mask_2"],
+            batch["token_ids"],
+            batch["token_type_ids"],
+            batch["attention_mask"],
             batch["labels"],
         )
 
-        token_ids_1 = token_ids_1.to(device)
-        token_type_ids_1 = token_type_ids_1.to(
+        token_ids = token_ids.to(device)
+        token_type_ids = token_type_ids.to(
             device
         )  # need to modify bert embedding to use this later
-        attention_mask_1 = attention_mask_1.to(device)
+        attention_mask = attention_mask.to(device)
 
-        token_ids_2 = token_ids_2.to(device)
-        token_type_ids_2 = token_type_ids_2.to(
-            device
-        )  # need to modify bert embedding to use this later
-        attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.type(torch.float32).to(device)
 
         # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
-        logits = model.predict_similarity(
-            token_ids_1, token_type_ids_1, attention_mask_1, token_ids_2, token_type_ids_2, attention_mask_2
-        )
+        logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
         loss = nn.MSELoss(reduction="mean")(logits, b_labels)
 
     # Run backprop for the loss from the task
@@ -380,12 +332,16 @@ def train_multitask(rank, world_size, args):
     # cycle_para_loader = itertools.cycle(para_train_dataloader)
 
     # para, sst, sts
-    loaders = [itertools.cycle(para_train_dataloader), itertools.cycle(sst_train_dataloader), itertools.cycle(sts_train_dataloader)]
+    loaders = [
+        itertools.cycle(para_train_dataloader),
+        itertools.cycle(sst_train_dataloader),
+        itertools.cycle(sts_train_dataloader),
+    ]
 
     # Run for the specified number of epochs.
-    
+
     # 600 steps per task
-    # PAL paper was running it for 300 * tasks but since I have had to 
+    # PAL paper was running it for 300 * tasks but since I have had to
     # reduce the batch size, I am increasing the steps per epoch
     if DEBUG:
         steps_per_epoch = 10
@@ -393,16 +349,16 @@ def train_multitask(rank, world_size, args):
     else:
         steps_per_epoch = 600 * 3
         probs = [283003, 8544, 6040]
-    
+
     for epoch in range(args.epochs):
         model.train()
 
         # annealed sampling
         # para, sst, sts
-        alpha = 1. - 0.8 * epoch / (args.epochs - 1)
+        alpha = 1.0 - 0.8 * epoch / (args.epochs - 1)
         probs = [p**alpha for p in probs]
         tot = sum(probs)
-        probs = [p/tot for p in probs]
+        probs = [p / tot for p in probs]
 
         # Initialize variables
         (
@@ -415,14 +371,16 @@ def train_multitask(rank, world_size, args):
         ) = (0, 0, 0, 0, 0, 0)
 
         # Paraphrase training
-        for step in tqdm(range(steps_per_epoch), desc=f"epoch {epoch}", disable=TQDM_DISABLE):
+        for step in tqdm(
+            range(steps_per_epoch), desc=f"epoch {epoch}", disable=TQDM_DISABLE
+        ):
             overall_steps = epoch * steps_per_epoch + step
 
             # get task_id
             task_id = np.random.choice([0, 1, 2], p=probs)
             task_loader = loaders[task_id]
             task_batch = next(task_loader)
-            
+
             # take a step
             optimizer.zero_grad()
             if task_id == 0:
@@ -457,7 +415,7 @@ def train_multitask(rank, world_size, args):
                     )
             else:
                 raise Exception("invalid task_id")
-            
+
             optimizer.step()
 
         (
