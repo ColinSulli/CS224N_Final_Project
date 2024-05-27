@@ -191,6 +191,7 @@ class MultitaskBERT(nn.Module):
             hypothesis = self.simcse_classifier(hypothesis)
 
             # calculate loss
+            optimizer.zero_grad()
 
             '''h_i = premise.masked_fill(labels > 0, float('-inf'))
             h_i_plus = hypothesis.masked_fill(labels > 0, float('-inf'))
