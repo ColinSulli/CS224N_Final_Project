@@ -266,7 +266,7 @@ class MultitaskBERT(nn.Module):
             #exit()
 
             #loss = F.cross_entropy(logits, labels.to(torch.float).view(-1), reduction='mean')
-            print(loss)
+            #print(loss)
             loss.backward()
             optimizer.step()
 

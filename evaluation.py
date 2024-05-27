@@ -80,9 +80,6 @@ def eval_cse(snli_train_dataloader, model, device):
         cse_y_pred.extend(y_hat)
         cse_y_true.extend(labels)
 
-        if(step == 100):
-            break
-
         #print("PREDICT ", y_hat)
         #print("LABELS ", labels)
 
