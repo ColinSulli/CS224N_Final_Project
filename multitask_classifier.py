@@ -141,7 +141,8 @@ class MultitaskBERT(nn.Module):
         snli = load_dataset('snli')
         snli_train_data = SNLIDataset(snli['train'], args)
 
-
+        #for line in range(15):
+        #    print(snli_train_data[line])
 
         batch_sizes = []
         previous_premise = ""
@@ -157,7 +158,7 @@ class MultitaskBERT(nn.Module):
 
         batch_itr = 0
         ### IMPORTANT: batch size must be multiple of 3! ###
-        snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=3,
+        snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=9,
                                            collate_fn=snli_train_data.collate_fn)
 
         for snli_batch in tqdm(snli_train_dataloader, desc=f'SNLI-Train', disable=TQDM_DISABLE):
@@ -166,9 +167,9 @@ class MultitaskBERT(nn.Module):
                 (snli_batch['token_ids_1'], snli_batch['token_type_ids_1'], snli_batch['attention_mask_1'], snli_batch['token_ids_2'],
                  snli_batch['token_type_ids_2'], snli_batch['attention_mask_2'], snli_batch['labels'])
             # increament batch_itr
-            batch_itr = batch_itr + 1
+            #batch_itr = batch_itr + 1
 
-            if(batch_itr == 10000):
+            if(batch_itr > 10000):
                 break
 
             token_ids_1 = token_ids_1.to(device)
@@ -178,6 +179,13 @@ class MultitaskBERT(nn.Module):
             token_type_ids_2 = token_type_ids_2.to(device)
             attention_mask_2 = attention_mask_2.to(device)
             labels = labels.to(device)
+
+            #print(token_ids_1.shape)
+            #token_ids_1 = torch.unique(token_ids_1,dim=0)
+            #attention_mask_1 = torch.unique(attention_mask_1,dim=0)
+            #print(attention_mask_1.shape)
+            #print(token_ids_1.shape)
+            #exit()
 
             # get embeddings
             premise = self.forward(token_ids_1, attention_mask_1)['pooler_output']
@@ -198,33 +206,60 @@ class MultitaskBERT(nn.Module):
             h_j_plus = hypothesis.masked_fill(labels > 0, float('-inf'))
             h_j_neg = hypothesis.masked_fill(labels < 2, float('-inf'))'''
 
+            sum = 0
+            unique_index = []
+            while sum < 9:
+                unique_index.append(sum)
+                sum = sum + batch_sizes[batch_itr]
+                batch_itr = batch_itr + 1
+
             temperature = 0.05
 
             #print(hypothesis)
             #print(labels)
 
-            if torch.sum(labels) != 1:
-                continue
+            #if torch.sum(labels) != 1:
+            #    continue
 
-            labels_true = labels.view(3,1)
+            '''print(premise)
+            premise = torch.unique(premise, dim=1)
+            print(premise.shape)
+            exit()'''
+
+            premise_unique = torch.index_select(input=premise, dim=0, index=torch.tensor(unique_index))
+            #print(premise_unique.shape)
+
+            labels_true = labels.view(9,1)
             hypothesis_true = torch.mul(hypothesis, labels_true)
-            filter = ~(hypothesis_true == 0).all(dim=1)
-            hypothesis_true = hypothesis_true[filter, :]
+            #filter = ~(hypothesis_true == 0).all(dim=1)
+            #hypothesis_true = hypothesis_true[filter, :]
+
+            premise_true = torch.mul(premise, labels_true)
 
 
             labels_false = 1 - labels
-            labels_false = labels_false.view(3,1)
+            labels_false = labels_false.view(9,1)
             hypothesis_false = torch.mul(hypothesis, labels_false)
             #print(torch.mul(hypothesis, temp_labels))
 
-            numerator = torch.exp(F.cosine_similarity(premise[0,:], hypothesis_true,dim=-1)) / temperature
-
-            #print(numerator)
+            numerator = torch.exp(F.cosine_similarity(premise_true, hypothesis_true,dim=-1)) / temperature
 
 
-            denominator = torch.exp(F.cosine_similarity(premise[0,:], hypothesis,dim=-1)) / temperature
+
+            denominator = torch.exp(F.cosine_similarity(premise, hypothesis,dim=-1)) / temperature
             denominator = torch.sum(denominator)
             logits = -torch.log(numerator/denominator)
+
+            #print(logits)
+
+            repeated = torch.mode(logits, 0)
+
+            #print(repeated[0].item())
+
+            mask = logits != repeated[0].item()
+            logits = logits[mask]
+
+            #print(logits.shape)
 
             #print(logits)
             loss = logits
@@ -267,8 +302,9 @@ class MultitaskBERT(nn.Module):
 
             #loss = F.cross_entropy(logits, labels.to(torch.float).view(-1), reduction='mean')
             #print(loss)
-            loss.backward()
+            loss.sum().backward()
             optimizer.step()
+            #exit()
 
         return "DONE"
 
