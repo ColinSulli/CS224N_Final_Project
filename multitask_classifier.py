@@ -141,6 +141,8 @@ class MultitaskBERT(nn.Module):
         snli = load_dataset('snli')
         snli_train_data = SNLIDataset(snli['train'], args)
 
+
+
         batch_sizes = []
         previous_premise = ""
         current_batch_size = 0
@@ -175,6 +177,7 @@ class MultitaskBERT(nn.Module):
             token_ids_2 = token_ids_2.to(device)
             token_type_ids_2 = token_type_ids_2.to(device)
             attention_mask_2 = attention_mask_2.to(device)
+            labels = labels.to(device)
 
             # get embeddings
             premise = self.forward(token_ids_1, attention_mask_1)['pooler_output']
