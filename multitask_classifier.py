@@ -115,7 +115,7 @@ class MultitaskBERT(nn.Module):
 
         # SST: 6 class classification The similarity scores vary from 0 to 5
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
+        self.sts_classifier = nn.Linear(config.hidden_size * 2, 1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
         "Takes a batch of sentences and produces embeddings for them."
@@ -188,10 +188,11 @@ class MultitaskBERT(nn.Module):
             input_ids_2, token_type_ids_2, attention_mask_2, self.task_ids["sts"]
         )
 
-        proj_1 = self.sts_classifier(output_1)
-        proj_2 = self.sts_classifier(output_2)
-        logits = F.cosine_similarity(proj_1, proj_2, dim=1).squeeze()
-        logits = (logits + 1) * 2.5
+        output_cat = torch.cat((output_1, output_2), dim=1)
+        logits = self.sts_classifier(output_cat)
+
+        # normalise between 0 and 5
+        logits = (torch.sigmoid(logits) * 5).squeeze(1)
 
         # we are using MSELoss, so no need to put sigmoid here
         return logits
@@ -331,7 +332,7 @@ def train_multitask(rank, world_size, args):
         device = torch.device("cpu")
 
     if rank == 0:
-        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-pal"
+        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-pal-annealed-sigmoid"
         summary_writer = SummaryWriter(f"runs/{run_name}")
         p_print(f"\n\n\n*** Train multitask {run_name} ***")
         p_print("device: {}, debug: {}".format(device, DEBUG))
@@ -372,15 +373,36 @@ def train_multitask(rank, world_size, args):
         model = DDP(model, device_ids=[rank])
 
     lr = args.lr
-    optimizer = AdamW(model.parameters(), lr=lr)
+    optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.01)
     best_overall_accuracy = 0
 
     # cycle_sst_loader = itertools.cycle(sst_train_dataloader)
-    cycle_para_loader = itertools.cycle(para_train_dataloader)
+    # cycle_para_loader = itertools.cycle(para_train_dataloader)
+
+    # para, sst, sts
+    loaders = [itertools.cycle(para_train_dataloader), itertools.cycle(sst_train_dataloader), itertools.cycle(sts_train_dataloader)]
 
     # Run for the specified number of epochs.
+    
+    # 600 steps per task
+    # PAL paper was running it for 300 * tasks but since I have had to 
+    # reduce the batch size, I am increasing the steps per epoch
+    if DEBUG:
+        steps_per_epoch = 10
+        probs = [1, 1, 1]
+    else:
+        steps_per_epoch = 600 * 3
+        probs = [283003, 8544, 6040]
+    
     for epoch in range(args.epochs):
         model.train()
+
+        # annealed sampling
+        # para, sst, sts
+        alpha = 1. - 0.8 * epoch / (args.epochs - 1)
+        probs = [p**alpha for p in probs]
+        tot = sum(probs)
+        probs = [p/tot for p in probs]
 
         # Initialize variables
         (
@@ -392,59 +414,51 @@ def train_multitask(rank, world_size, args):
             sts_num_batches,
         ) = (0, 0, 0, 0, 0, 0)
 
-        # since paraphrase has lots of data, lets try to limit it to 1800 batches per epoch
-        # this way, we can cover all the data at least twice in 10 epochs
-        if DEBUG:
-            loop_size = 10
-        else:
-            loop_size = 1800
-
         # Paraphrase training
-        for step in tqdm(range(loop_size), desc="para train", disable=TQDM_DISABLE):
-            para_batch = next(cycle_para_loader)
+        for step in tqdm(range(steps_per_epoch), desc=f"epoch {epoch}", disable=TQDM_DISABLE):
+            overall_steps = epoch * steps_per_epoch + step
+
+            # get task_id
+            task_id = np.random.choice([0, 1, 2], p=probs)
+            task_loader = loaders[task_id]
+            task_batch = next(task_loader)
+            
+            # take a step
             optimizer.zero_grad()
-            para_training_loss = train(para_batch, device, model, "para")
-            para_train_loss += para_training_loss.item()
-            para_num_batches += 1
+            if task_id == 0:
+                para_batch = task_batch
+                para_training_loss = train(para_batch, device, model, "para")
+                para_train_loss += para_training_loss.item()
+                para_num_batches += 1
+
+                if rank == 0 and step % 10 == 0:
+                    summary_writer.add_scalar(
+                        "para_train_loss", para_training_loss.item(), overall_steps
+                    )
+            elif task_id == 1:
+                sst_batch = task_batch
+                sst_training_loss = train(sst_batch, device, model, "sst")
+                sst_train_loss += sst_training_loss.item()
+                sst_num_batches += 1
+
+                if rank == 0 and step % 10 == 0:
+                    summary_writer.add_scalar(
+                        "sst_train_loss", sst_training_loss.item(), overall_steps
+                    )
+            elif task_id == 2:
+                sts_batch = task_batch
+                sts_training_loss = train(sts_batch, device, model, "sts")
+                sts_train_loss += sts_training_loss.item()
+                sts_num_batches += 1
+
+                if rank == 0 and step % 10 == 0:
+                    summary_writer.add_scalar(
+                        "sts_train_loss", sts_training_loss.item(), overall_steps
+                    )
+            else:
+                raise Exception("invalid task_id")
+            
             optimizer.step()
-
-            if rank == 0 and step % 10 == 0:
-                overall_steps = epoch * len(para_train_dataloader) + step
-                summary_writer.add_scalar(
-                    "para_train_loss", para_training_loss.item(), overall_steps
-                )
-
-        # SST training
-        for step, sst_batch in enumerate(
-            tqdm(sst_train_dataloader, desc="sst train", disable=TQDM_DISABLE)
-        ):
-            optimizer.zero_grad()
-            sst_training_loss = train(sst_batch, device, model, "sst")
-            sst_train_loss += sst_training_loss.item()
-            sst_num_batches += 1
-            optimizer.step()
-
-            if rank == 0 and step % 10 == 0:
-                overall_steps = epoch * len(sst_train_dataloader) + step
-                summary_writer.add_scalar(
-                    "sst_train_loss", sst_training_loss.item(), overall_steps
-                )
-
-        # STS training
-        for step, sts_batch in enumerate(
-            tqdm(sts_train_dataloader, desc="sts train", disable=TQDM_DISABLE)
-        ):
-            optimizer.zero_grad()
-            sts_training_loss = train(sts_batch, device, model, "sts")
-            sts_train_loss += sts_training_loss.item()
-            sts_num_batches += 1
-            optimizer.step()
-
-            if rank == 0 and step % 10 == 0:
-                overall_steps = epoch * len(sts_train_dataloader) + step
-                summary_writer.add_scalar(
-                    "sts_train_loss", sts_training_loss.item(), overall_steps
-                )
 
         (
             sst_dev_acc,
@@ -483,9 +497,10 @@ def train_multitask(rank, world_size, args):
                 save_model(model, optimizer, args, config, args.filepath)
                 best_overall_accuracy = overall_accuracy
 
-        sts_train_loss = sts_train_loss / sts_num_batches
-        para_train_loss = para_train_loss / para_num_batches
-        sst_train_loss = sst_train_loss / sst_num_batches
+        # while debgging, we may not encounter batches, so avoid division by 0
+        sts_train_loss = sts_train_loss / (sts_num_batches + 1e-9)
+        para_train_loss = para_train_loss / (para_num_batches + 1e-9)
+        sst_train_loss = sst_train_loss / (sst_num_batches + 1e-9)
 
         p_print(
             f"Epoch {epoch}: Rank: {rank} sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, sst dev acc :: {sst_dev_acc :.3f}, para dev acc :: {para_dev_acc :.3f}, sts dev corr :: {sts_dev_corr :.3f}"
