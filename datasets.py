@@ -45,16 +45,18 @@ class SentenceClassificationDataset(Dataset):
         encoding = self.tokenizer(sents, return_tensors='pt', padding=True, truncation=True)
         token_ids = torch.LongTensor(encoding['input_ids'])
         attention_mask = torch.LongTensor(encoding['attention_mask'])
+        token_type_ids = torch.LongTensor(encoding['token_type_ids'])
         labels = torch.LongTensor(labels)
 
-        return token_ids, attention_mask, labels, sents, sent_ids
+        return token_ids, token_type_ids, attention_mask, labels, sents, sent_ids
 
     def collate_fn(self, all_data):
-        token_ids, attention_mask, labels, sents, sent_ids= self.pad_data(all_data)
+        token_ids, token_type_ids, attention_mask, labels, sents, sent_ids= self.pad_data(all_data)
 
         batched_data = {
                 'token_ids': token_ids,
                 'attention_mask': attention_mask,
+                'token_type_ids': token_type_ids,
                 'labels': labels,
                 'sents': sents,
                 'sent_ids': sent_ids
@@ -83,15 +85,17 @@ class SentenceClassificationTestDataset(Dataset):
         encoding = self.tokenizer(sents, return_tensors='pt', padding=True, truncation=True)
         token_ids = torch.LongTensor(encoding['input_ids'])
         attention_mask = torch.LongTensor(encoding['attention_mask'])
+        token_type_ids = torch.LongTensor(encoding['token_type_ids'])
 
-        return token_ids, attention_mask, sents, sent_ids
+        return token_ids, token_type_ids, attention_mask, sents, sent_ids
 
     def collate_fn(self, all_data):
-        token_ids, attention_mask, sents, sent_ids= self.pad_data(all_data)
+        token_ids, token_type_ids, attention_mask, sents, sent_ids= self.pad_data(all_data)
 
         batched_data = {
                 'token_ids': token_ids,
                 'attention_mask': attention_mask,
+                'token_type_ids': token_type_ids,
                 'sents': sents,
                 'sent_ids': sent_ids
             }

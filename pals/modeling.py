@@ -570,12 +570,11 @@ class BertForMultiTask(nn.Module):
 
     ```
     """
-    def __init__(self, config, tasks):
+    def __init__(self, config):
         super(BertForMultiTask, self).__init__()
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = nn.ModuleList([nn.Linear(config.hidden_size, num_labels) 
-                                         for i, num_labels in enumerate(tasks)])
+        
         def init_weights(module):
             if isinstance(module, (nn.Linear, nn.Embedding)):
                 # Slightly different from the TF version which uses truncated_normal for initialization
@@ -592,19 +591,7 @@ class BertForMultiTask(nn.Module):
     def forward(self, input_ids, token_type_ids, attention_mask, task_id, name='cola', labels=None):
         _, pooled_output = self.bert(input_ids, token_type_ids, attention_mask, task_id)
         pooled_output = self.dropout(pooled_output)
-        logits = self.classifier[task_id](pooled_output)
-
-        if labels is not None and name != 'sts':
-            loss_fct = CrossEntropyLoss()
-            loss = loss_fct(logits, labels)
-            return loss, logits
-        # STS is a regression task.
-        elif labels is not None and name == 'sts':
-            loss_fct = MSELoss()
-            loss = loss_fct(logits, labels.unsqueeze(1))
-            return loss, logits
-        else:
-            return logits
+        return pooled_output
 
 
 class BertForSequenceClassification(nn.Module):
