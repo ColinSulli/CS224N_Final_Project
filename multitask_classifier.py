@@ -158,7 +158,7 @@ class MultitaskBERT(nn.Module):
 
         batch_itr = 0
         ### IMPORTANT: batch size must be multiple of 3! ###
-        snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=9,
+        snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=15,
                                            collate_fn=snli_train_data.collate_fn)
 
         for snli_batch in tqdm(snli_train_dataloader, desc=f'SNLI-Train', disable=TQDM_DISABLE):
@@ -208,11 +208,11 @@ class MultitaskBERT(nn.Module):
 
             sum = 0
             unique_index = []
-            while sum < 9:
+            while sum < 15:
                 unique_index.append(sum)
                 sum = sum + batch_sizes[batch_itr]
                 batch_itr = batch_itr + 1
-            unique_index.to(device)
+            unique_index = torch.tensor(unique_index).to(device)
             temperature = 0.05
 
             #print(hypothesis)
@@ -226,10 +226,10 @@ class MultitaskBERT(nn.Module):
             print(premise.shape)
             exit()'''
 
-            premise_unique = torch.index_select(input=premise, dim=0, index=torch.tensor(unique_index))
+            premise_unique = torch.index_select(input=premise, dim=0, index=unique_index)
             #print(premise_unique.shape)
 
-            labels_true = labels.view(9,1)
+            labels_true = labels.view(15,1)
             hypothesis_true = torch.mul(hypothesis, labels_true)
             #filter = ~(hypothesis_true == 0).all(dim=1)
             #hypothesis_true = hypothesis_true[filter, :]
@@ -238,7 +238,7 @@ class MultitaskBERT(nn.Module):
 
 
             labels_false = 1 - labels
-            labels_false = labels_false.view(9,1)
+            labels_false = labels_false.view(15,1)
             hypothesis_false = torch.mul(hypothesis, labels_false)
             #print(torch.mul(hypothesis, temp_labels))
 
