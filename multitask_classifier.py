@@ -82,7 +82,7 @@ class MultitaskBERT(nn.Module):
         # Para
         self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
         # SST
-        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
+        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size*2)
         self.simcse_classifier = nn.Linear(config.hidden_size, config.hidden_size)
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -340,15 +340,22 @@ class MultitaskBERT(nn.Module):
         # cosine similarity
         att_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
         att_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
+        #att_1_1 = self.forward(input_ids_1, attention_mask_1)['pooler_output']
+        #att_2_2 = self.forward(input_ids_2, attention_mask_2)['pooler_output']
 
         # Apply Dropout
         att_1 = self.dropout(att_1)
         att_2 = self.dropout(att_2)
+        att_1 = self.dropout(att_1)
+        att_2 = self.dropout(att_2)
 
-        #att_1 = self.sts_classifier(att_1)
-        #att_2 = self.sts_classifier(att_2)
-        att_1 = self.simcse_classifier(att_1)
-        att_2 = self.simcse_classifier(att_2)
+        #att_1_cat = torch.cat(att_1, att_1_1, dim=1)
+        #att_2_cat = torch.cat(att_2, att_2_2, dim=1)
+
+        att_1 = self.sts_classifier(att_1)
+        att_2 = self.sts_classifier(att_2)
+        #att_1 = self.simcse_classifier(att_1)
+        #att_2 = self.simcse_classifier(att_2)
 
         input_cos = F.cosine_similarity(att_1, att_2)
 
@@ -413,18 +420,18 @@ def train(batch, device, optimizer, model, type):
         elif type == 'sts':
             optimizer.zero_grad()
 
-            test = model.train_similarity(args, device, optimizer)
-            loss = 1
-            #logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
-            #logits = logits.to(torch.float)
+            #test = model.train_similarity(args, device, optimizer)
+            #loss = 1
+            logits = model.predict_similarity(token_ids_1, attention_mask_1, token_ids_2, attention_mask_2)
+            logits = logits.to(torch.float)
 
             #print(b_labels.to(torch.float))
 
             #loss = F.cross_entropy(logits, b_labels.to(torch.float).view(-1), reduction='mean')
-            #loss = nn.MSELoss(reduction="mean")(logits, b_labels.to(torch.float))
+            loss = nn.MSELoss(reduction="mean")(logits, b_labels.to(torch.float))
 
-        #loss.backward()
-        #optimizer.step()
+        loss.backward()
+        optimizer.step()
 
     return loss
 
@@ -522,18 +529,18 @@ def train_multitask(args):
                 sts_train_loss += sts_train_loss
                 sts_num_batches += 1
                 sts_train_loss = sts_train_loss / sts_num_batches
-                break
 
-        snli = load_dataset('snli')
+
+        '''snli = load_dataset('snli')
         snli_train_data = SNLIDataset(snli['test'], args)
 
         snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=3,
                                            collate_fn=snli_train_data.collate_fn)
 
         cse_acc = eval_cse(snli_train_dataloader, model, device)
-        print("CSE ACC: ", cse_acc)
+        print("CSE ACC: ", cse_acc)'''
 
-        '''train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device, args.train)
+        train_acc, train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device, args.train)
         dev_acc, dev_f1, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device, args.train)
 
     if dev_acc > best_dev_acc:
@@ -541,7 +548,7 @@ def train_multitask(args):
         save_model(model, optimizer, args, config, args.filepath)
 
     print(
-        f"Epoch {epoch}: sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")'''
+        f"Epoch {epoch}: sst train loss :: {sst_train_loss :.3f}, para train loss :: {para_train_loss :.3f}, sts train loss :: {sts_train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
 
 def test_multitask(args):
     '''Test and save predictions on the dev and test sets of all three tasks.'''
