@@ -404,7 +404,6 @@ def train_multitask(rank, world_size, args):
             # take a step
             optimizer.zero_grad()
             if task_id == 0:
-                continue
                 para_batch = task_batch
                 para_training_loss = train(para_batch, device, model, "para")
                 para_train_loss += para_training_loss.item()
@@ -415,7 +414,6 @@ def train_multitask(rank, world_size, args):
                         "para_train_loss", para_training_loss.item(), overall_steps
                     )
             elif task_id == 1:
-                continue
                 sst_batch = task_batch
                 sst_training_loss = train(sst_batch, device, model, "sst")
                 sst_train_loss += sst_training_loss.item()
