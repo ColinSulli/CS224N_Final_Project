@@ -82,7 +82,7 @@ class MultitaskBERT(nn.Module):
         # Para
         self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
         # SST
-        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
+        self.sts_classifier = nn.Linear(config.hidden_size * 2, config.hidden_size * 2)
         self.simcse_classifier = nn.Linear(config.hidden_size, config.hidden_size)
 
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -346,14 +346,14 @@ class MultitaskBERT(nn.Module):
         # Apply Dropout
         att_1 = self.dropout(att_1)
         att_2 = self.dropout(att_2)
-        #att_1 = self.dropout(att_1)
-        #att_2 = self.dropout(att_2)
+        att_1_1 = self.dropout(att_1)
+        att_2_2 = self.dropout(att_2)
 
-        #att_1_cat = torch.cat(att_1, att_1_1, dim=1)
-        #att_2_cat = torch.cat(att_2, att_2_2, dim=1)
+        att_1_cat = torch.cat((att_1, att_1_1), dim=1)
+        att_2_cat = torch.cat((att_2, att_2_2), dim=1)
 
-        att_1 = self.sts_classifier(att_1)
-        att_2 = self.sts_classifier(att_2)
+        att_1 = self.sts_classifier(att_1_cat)
+        att_2 = self.sts_classifier(att_2_cat)
         #att_1 = self.simcse_classifier(att_1)
         #att_2 = self.simcse_classifier(att_2)
 
