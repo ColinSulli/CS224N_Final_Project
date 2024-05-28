@@ -23,7 +23,7 @@ class BertSelfAttention(nn.Module):
     # This dropout is applied to normalized attention scores following the original
     # implementation of transformer. Although it is a bit unusual, we empirically
     # observe that it yields better performance.
-    self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
+    self.dropout = nn.Dropout(0.3)
     
     self.use_rotary_embed = config.use_rotary_embed
     if self.use_rotary_embed:
@@ -115,14 +115,14 @@ class BertLayer(nn.Module):
     # Add-norm for multi-head attention.
     self.attention_dense = nn.Linear(config.hidden_size, config.hidden_size)
     self.attention_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-    self.attention_dropout = nn.Dropout(config.hidden_dropout_prob)
+    self.attention_dropout = nn.Dropout(0.3)
     # Feed forward.
     self.interm_dense = nn.Linear(config.hidden_size, config.intermediate_size)
     self.interm_af = F.gelu
     # Add-norm for feed forward.
     self.out_dense = nn.Linear(config.intermediate_size, config.hidden_size)
     self.out_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-    self.out_dropout = nn.Dropout(config.hidden_dropout_prob)
+    self.out_dropout = nn.Dropout(0.3)
 
   def add_norm(self, input, output, dense_layer, dropout, ln_layer):
     """
@@ -190,7 +190,7 @@ class BertModel(BertPreTrainedModel):
     self.word_embedding = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
     self.tk_type_embedding = nn.Embedding(config.type_vocab_size, config.hidden_size)
     self.embed_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-    self.embed_dropout = nn.Dropout(config.hidden_dropout_prob)
+    self.embed_dropout = nn.Dropout(0.3)
 
     # BERT encoder.
     self.bert_layers = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
