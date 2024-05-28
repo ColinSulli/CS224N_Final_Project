@@ -105,7 +105,7 @@ class MultitaskBERT(nn.Module):
         # Paraphrasing: Binary classification
         # we are concatenating the embeddings of the two sentences
         # and then passing them through a linear layer.
-        self.para_classifier = nn.Linear(config.hidden_size, 1)
+        self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
 
         # SST: 5 class classification
         # negative, somewhat negative, neutral, somewhat positive, or positive.
@@ -115,7 +115,7 @@ class MultitaskBERT(nn.Module):
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Linear(config.hidden_size*2, 1)
+        self.sts_classifier = nn.Linear(config.hidden_size * 2, 1)
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
@@ -137,6 +137,10 @@ class MultitaskBERT(nn.Module):
         output = self.forward(
             input_ids, token_type_ids, attention_mask, self.task_ids["para"]
         )
+
+        output_1 = self.dropout(output)
+        output_2 = self.dropout(output)
+        output = torch.cat((output_1, output_2), dim=1)
 
         logits = self.para_classifier(output).squeeze()
 
