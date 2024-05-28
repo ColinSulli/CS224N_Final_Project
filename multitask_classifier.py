@@ -115,7 +115,8 @@ class MultitaskBERT(nn.Module):
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Linear(config.hidden_size, 1)
+        self.sts_classifier = nn.Linear(config.hidden_size*2, 1)
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
         "Takes a batch of sentences and produces embeddings for them."
@@ -166,9 +167,25 @@ class MultitaskBERT(nn.Module):
         Note that your output should be unnormalized (a logit).
         """
         # concatenate inputs and attention masks
+
+        #print(input_ids)
+        #print(input_ids.shape)
+
         output = self.forward(
             input_ids, token_type_ids, attention_mask, self.task_ids["sts"]
         )
+
+        #print(output.shape)
+
+        output_even = output[::2, :]
+        output_odd = output[1::2, :]
+
+        #print(output_even.shape)
+        #print(output_odd.shape)
+
+        output_1 = self.dropout(output)
+        output_2 = self.dropout(output)
+        output = torch.cat((output_1, output_2), dim=1)
 
         logits = self.sts_classifier(output)
 
@@ -387,6 +404,7 @@ def train_multitask(rank, world_size, args):
             # take a step
             optimizer.zero_grad()
             if task_id == 0:
+                continue
                 para_batch = task_batch
                 para_training_loss = train(para_batch, device, model, "para")
                 para_train_loss += para_training_loss.item()
@@ -397,6 +415,7 @@ def train_multitask(rank, world_size, args):
                         "para_train_loss", para_training_loss.item(), overall_steps
                     )
             elif task_id == 1:
+                continue
                 sst_batch = task_batch
                 sst_training_loss = train(sst_batch, device, model, "sst")
                 sst_train_loss += sst_training_loss.item()
