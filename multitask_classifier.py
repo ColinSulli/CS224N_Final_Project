@@ -356,8 +356,6 @@ def train_multitask(rank, world_size, args):
     for param in model.parameters():
         param.requires_grad = False
 
-    model.sts_classifier.requires_grad = True
-    model.para_classifier.requires_grad = True
     snli_train_dataloader = data_loader_for_snli(args)
     for batch in tqdm(snli_train_dataloader, desc=f'SNLI-Train', disable=TQDM_DISABLE):
         # read in data for each batch
@@ -372,6 +370,7 @@ def train_multitask(rank, world_size, args):
         ### STS ###
         optimizer.zero_grad()
         logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
+        logits.requires_grad_()
         loss = nn.MSELoss(reduction="mean")(logits, b_labels)
         loss.requires_grad_()
         loss.backward()
@@ -381,6 +380,7 @@ def train_multitask(rank, world_size, args):
         ### Para ###
         optimizer.zero_grad()
         logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
+        logits.requires_grad_()
         loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
         loss.requires_grad_()
         loss.backward()
