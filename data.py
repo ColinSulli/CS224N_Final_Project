@@ -1,11 +1,22 @@
-from datasets import (
+from datasets_default import (
     SentenceClassificationDataset,
     SentenceClassificationTestDataset,
     SentencePairDataset,
     SentencePairTestDataset,
     load_multitask_data,
+    SNLIDataset
 )
 from torch.utils.data import DistributedSampler, DataLoader
+from datasets import load_dataset
+
+def data_loader_for_snli(args):
+    # read in SNLI dataset
+    snli = load_dataset('snli')
+    snli_train_data = SNLIDataset(snli['train'], args)
+    snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=30,
+                                       collate_fn=snli_train_data.collate_fn)
+
+    return snli_train_dataloader
 
 
 def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=False, debug=False):

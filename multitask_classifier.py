@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from data import data_loaders_for_test, data_loaders_for_train_and_validation
+from data import data_loaders_for_test, data_loaders_for_train_and_validation, data_loader_for_snli
 from evaluation import model_eval_multitask, model_eval_test_multitask
 from optimizer import AdamW
 from pals.pal import get_pal
@@ -115,7 +115,7 @@ class MultitaskBERT(nn.Module):
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
+        self.sts_classifier = nn.Linear(config.hidden_size * 2, 1)
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
@@ -177,32 +177,14 @@ class MultitaskBERT(nn.Module):
         """
         # concatenate inputs and attention masks
 
-        '''output = self.forward(
+        output = self.forward(
             input_ids, token_type_ids, attention_mask, self.task_ids["sts"]
-        )'''
-
-        att = token_type_ids.masked_fill(attention_mask == 0, -1)
-
-        att_input_1 = att.masked_fill(token_type_ids == 1, -1)
-        att_input_1 = att_input_1.masked_fill(att_input_1 == 0, 1)
-        att_input_1 = att_input_1.masked_fill(att_input_1 == -1, 0)
-
-        att_input_2 = att.masked_fill(att == -1, 0)
-
-        output_1 = self.forward(
-            input_ids, token_type_ids, att_input_1, self.task_ids["sts"]
-        )
-        output_2 = self.forward(
-            input_ids, token_type_ids, att_input_2, self.task_ids["sts"]
         )
 
-        output_1 = self.dropout(output_1)
-        output_2 = self.dropout(output_2)
-
-        output_1 = self.sts_classifier(output_1)
-        output_2 = self.sts_classifier(output_2)
-
-        logits = F.cosine_similarity(output_1, output_2)
+        output_1 = self.dropout(output)
+        output_2 = self.dropout(output)
+        output = torch.cat((output_1, output_2), dim=1)
+        logits = self.sts_classifier(output)
 
         # normalise between 0 to 5
         logits = torch.sigmoid(logits).squeeze() * 5.0
@@ -372,6 +354,36 @@ def train_multitask(rank, world_size, args):
         itertools.cycle(sst_train_dataloader),
         itertools.cycle(sts_train_dataloader),
     ]
+
+    ### First Fine-Tune on SNLI Dataset ###
+
+    for param in model.bert.parameters():
+        param.requires_grad = False
+
+    snli_train_dataloader = data_loader_for_snli(args)
+    for batch in tqdm(snli_train_dataloader, desc=f'SNLI-Train', disable=TQDM_DISABLE):
+        # read in data for each batch
+        (token_ids, token_type_ids, attention_mask, b_labels) = \
+            (batch["token_ids"], batch["token_type_ids"], batch["attention_mask"], batch["labels"])
+
+        token_ids = token_ids.to(device)
+        token_type_ids = token_type_ids.to(device)
+        attention_mask = attention_mask.to(device)
+        b_labels = b_labels.type(torch.float32).to(device)
+
+        # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
+        optimizer.zero_grad()
+        logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
+
+        loss = nn.MSELoss(reduction="mean")(logits, b_labels)
+        loss.backward()
+        optimizer.step()
+
+    for param in model.bert.parameters():
+        if config.fine_tune_mode == "last-linear-layer":
+            param.requires_grad = False
+        elif config.fine_tune_mode == "full-model":
+            param.requires_grad = True
 
     # Run for the specified number of epochs.
 

@@ -105,6 +105,83 @@ class SentenceClassificationTestDataset(Dataset):
         return batched_data
 
 
+class SNLIDataset(Dataset):
+    def __init__(self, dataset, args, isRegression=False, max_sequence_length=128):
+        self.dataset = dataset
+        self.p = args
+        self.isRegression = isRegression
+        self.max_sequence_length = max_sequence_length
+        self.tokenizer = tokenization.FullTokenizer(
+            vocab_file='uncased_L-12_H-768_A-12/vocab.txt', do_lower_case=True)
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        return self.dataset[idx]
+
+    def pad_data(self, data):
+        batch_size = len(data)
+        token_ids = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        token_type_ids = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        attention_mask = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        labels = torch.zeros(batch_size, 1, dtype=torch.float32 if self.isRegression else torch.long)
+
+        sent_ids = []
+
+        for index, training_case in enumerate(data):
+
+            sent1 = training_case['premise']
+            sent2 = training_case['hypothesis']
+            label = training_case['label']
+
+            if label == 0:
+                label = 1
+            else:
+                label = 0
+
+            tokens_1 = self.tokenizer.tokenize(sent1)
+            tokens_2 = self.tokenizer.tokenize(sent2)
+
+            # Modifies `tokens_a` and `tokens_b` in place so that the total
+            # length is less than the specified length.
+            # Account for [CLS], [SEP], [SEP] with "- 3"
+            _truncate_seq_pair(tokens_1, tokens_2, self.max_sequence_length - 3)
+
+            tokens = ["[CLS]"] + tokens_1 + ["[SEP]"] + tokens_2 + ["[SEP]"]
+            segment_ids = [0] * (len(tokens_1) + 2) + [1] * (len(tokens_2) + 1)
+            input_mask = [1] * len(tokens)
+
+            input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+
+            padding_length = self.max_sequence_length - len(tokens)
+            input_ids.extend([0] * padding_length)
+            segment_ids.extend([0] * padding_length)
+            input_mask.extend([0] * padding_length)
+
+            assert len(input_ids) == self.max_sequence_length
+            assert len(input_mask) == self.max_sequence_length
+            assert len(segment_ids) == self.max_sequence_length
+
+            token_ids[index] = torch.Tensor(input_ids)
+            token_type_ids[index] = torch.Tensor(segment_ids)
+            attention_mask[index] = torch.Tensor(input_mask)
+            labels[index] = torch.Tensor([label])
+
+        return (token_ids, token_type_ids, attention_mask, labels.squeeze(1))
+
+    def collate_fn(self, all_data):
+        (token_ids, token_type_ids, attention_mask, labels) = self.pad_data(all_data)
+
+        batched_data = {
+                'token_ids': token_ids,
+                'token_type_ids': token_type_ids,
+                'attention_mask': attention_mask,
+                'labels': labels,
+            }
+
+        return batched_data
+
 class SentencePairDataset(Dataset):
     def __init__(self, dataset, args, isRegression=False, max_sequence_length=128):
         self.dataset = dataset
