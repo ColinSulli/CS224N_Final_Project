@@ -115,7 +115,7 @@ class MultitaskBERT(nn.Module):
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Linear(config.hidden_size * 2, 1)
+        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
@@ -125,7 +125,6 @@ class MultitaskBERT(nn.Module):
         # When thinking of improvements, you can later try modifying this
         # (e.g., by adding other layers).
 
-        # for now just returning bert embedding
         return self.bert.forward(input_ids, token_type_ids, attention_mask, task_id)
 
     def predict_paraphrase(self, input_ids, token_type_ids, attention_mask):
@@ -178,26 +177,32 @@ class MultitaskBERT(nn.Module):
         """
         # concatenate inputs and attention masks
 
-        #print(input_ids)
-        #print(input_ids.shape)
-
-        output = self.forward(
+        '''output = self.forward(
             input_ids, token_type_ids, attention_mask, self.task_ids["sts"]
+        )'''
+
+        att = token_type_ids.masked_fill(attention_mask == 0, -1)
+
+        att_input_1 = att.masked_fill(token_type_ids == 1, -1)
+        att_input_1 = att_input_1.masked_fill(att_input_1 == 0, 1)
+        att_input_1 = att_input_1.masked_fill(att_input_1 == -1, 0)
+
+        att_input_2 = att.masked_fill(att == -1, 0)
+
+        output_1 = self.forward(
+            input_ids, token_type_ids, att_input_1, self.task_ids["sts"]
+        )
+        output_2 = self.forward(
+            input_ids, token_type_ids, att_input_2, self.task_ids["sts"]
         )
 
-        #print(output.shape)
+        output_1 = self.dropout(output_1)
+        output_2 = self.dropout(output_2)
 
-        output_even = output[::2, :]
-        output_odd = output[1::2, :]
+        output_1 = self.sts_classifier(output_1)
+        output_2 = self.sts_classifier(output_2)
 
-        #print(output_even.shape)
-        #print(output_odd.shape)
-
-        output_1 = self.dropout(output)
-        output_2 = self.dropout(output)
-        output = torch.cat((output_1, output_2), dim=1)
-
-        logits = self.sts_classifier(output)
+        logits = F.cosine_similarity(output_1, output_2)
 
         # normalise between 0 to 5
         logits = torch.sigmoid(logits).squeeze() * 5.0
