@@ -353,9 +353,11 @@ def train_multitask(rank, world_size, args):
 
     ### First Fine-Tune on SNLI Dataset ###
 
-    for param in model.bert.parameters():
+    for param in model.parameters():
         param.requires_grad = False
 
+    model.sts_classifier.requires_grad = True
+    model.para_classifier.requires_grad = True
     snli_train_dataloader = data_loader_for_snli(args)
     for batch in tqdm(snli_train_dataloader, desc=f'SNLI-Train', disable=TQDM_DISABLE):
         # read in data for each batch
@@ -371,6 +373,7 @@ def train_multitask(rank, world_size, args):
         optimizer.zero_grad()
         logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
         loss = nn.MSELoss(reduction="mean")(logits, b_labels)
+        loss.requires_grad_()
         loss.backward()
         optimizer.step()
         ### STS ###
@@ -379,11 +382,12 @@ def train_multitask(rank, world_size, args):
         optimizer.zero_grad()
         logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
         loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
+        loss.requires_grad_()
         loss.backward()
         optimizer.step()
         ### Para ###
 
-    for param in model.bert.parameters():
+    for param in model.parameters():
         if config.fine_tune_mode == "last-linear-layer":
             param.requires_grad = False
         elif config.fine_tune_mode == "full-model":
