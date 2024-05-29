@@ -385,6 +385,7 @@ def train_multitask(rank, world_size, args):
 
                 ### STS ###
                 optimizer.zero_grad()
+                model = get_model(model)
                 logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
                 logits.requires_grad_()
                 loss = nn.MSELoss(reduction="mean")(logits, b_labels)
@@ -395,6 +396,7 @@ def train_multitask(rank, world_size, args):
 
                 ### Para ###
                 optimizer.zero_grad()
+                model = get_model(model)
                 logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
                 logits.requires_grad_()
                 loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
