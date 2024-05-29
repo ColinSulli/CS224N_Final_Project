@@ -351,48 +351,6 @@ def train_multitask(rank, world_size, args):
         itertools.cycle(sts_train_dataloader),
     ]
 
-    ### First Fine-Tune on SNLI Dataset ###
-
-    for param in model.parameters():
-        param.requires_grad = False
-
-    snli_train_dataloader = data_loader_for_snli(args)
-    for batch in tqdm(snli_train_dataloader, desc=f'SNLI-Train', disable=TQDM_DISABLE):
-        # read in data for each batch
-        (token_ids, token_type_ids, attention_mask, b_labels) = \
-            (batch["token_ids"], batch["token_type_ids"], batch["attention_mask"], batch["labels"])
-
-        token_ids = token_ids.to(device)
-        token_type_ids = token_type_ids.to(device)
-        attention_mask = attention_mask.to(device)
-        b_labels = b_labels.type(torch.float32).to(device)
-
-        ### STS ###
-        optimizer.zero_grad()
-        logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
-        logits.requires_grad_()
-        loss = nn.MSELoss(reduction="mean")(logits, b_labels)
-        loss.requires_grad_()
-        loss.backward()
-        optimizer.step()
-        ### STS ###
-
-        ### Para ###
-        optimizer.zero_grad()
-        logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
-        logits.requires_grad_()
-        loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
-        loss.requires_grad_()
-        loss.backward()
-        optimizer.step()
-        ### Para ###
-
-    for param in model.parameters():
-        if config.fine_tune_mode == "last-linear-layer":
-            param.requires_grad = False
-        elif config.fine_tune_mode == "full-model":
-            param.requires_grad = True
-
     # Run for the specified number of epochs.
 
     # 600 steps per task
@@ -407,6 +365,49 @@ def train_multitask(rank, world_size, args):
 
     for epoch in range(args.epochs):
         model.train()
+
+        if epoch < 1:
+            ### First Fine-Tune on SNLI Dataset ###
+
+            for param in model.parameters():
+                param.requires_grad = False
+
+            snli_train_dataloader = data_loader_for_snli(args)
+            for batch in tqdm(snli_train_dataloader, desc=f'SNLI-Train', disable=TQDM_DISABLE):
+                # read in data for each batch
+                (token_ids, token_type_ids, attention_mask, b_labels) = \
+                    (batch["token_ids"], batch["token_type_ids"], batch["attention_mask"], batch["labels"])
+
+                token_ids = token_ids.to(device)
+                token_type_ids = token_type_ids.to(device)
+                attention_mask = attention_mask.to(device)
+                b_labels = b_labels.type(torch.float32).to(device)
+
+                ### STS ###
+                optimizer.zero_grad()
+                logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
+                logits.requires_grad_()
+                loss = nn.MSELoss(reduction="mean")(logits, b_labels)
+                loss.requires_grad_()
+                loss.backward()
+                optimizer.step()
+                ### STS ###
+
+                ### Para ###
+                optimizer.zero_grad()
+                logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
+                logits.requires_grad_()
+                loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
+                loss.requires_grad_()
+                loss.backward()
+                optimizer.step()
+                ### Para ###
+
+            for param in model.parameters():
+                if config.fine_tune_mode == "last-linear-layer":
+                    param.requires_grad = False
+                elif config.fine_tune_mode == "full-model":
+                    param.requires_grad = True
 
         # annealed sampling
         # para, sst, sts
