@@ -97,10 +97,10 @@ class MultitaskBERT(nn.Module):
         # last-linear-layer mode does not require updating BERT paramters.
         assert config.fine_tune_mode in ["last-linear-layer", "full-model"]
         for param in self.bert.parameters():
-            if config.fine_tune_mode == "last-linear-layer":
-                param.requires_grad = False
-            elif config.fine_tune_mode == "full-model":
-                param.requires_grad = True
+            #if config.fine_tune_mode == "last-linear-layer":
+            param.requires_grad = False
+            #elif config.fine_tune_mode == "full-model":
+            #    param.requires_grad = True
 
         # Paraphrasing: Binary classification
         # we are concatenating the embeddings of the two sentences
@@ -368,11 +368,8 @@ def train_multitask(rank, world_size, args):
 
         if epoch < 1:
             ### First Fine-Tune on SNLI Dataset ###
-
-            for param in model.parameters():
-                param.requires_grad = False
-
             snli_train_dataloader = data_loader_for_snli(args)
+            count = 0
             for batch in tqdm(snli_train_dataloader, desc=f'SNLI-Train', disable=TQDM_DISABLE):
                 # read in data for each batch
                 (token_ids, token_type_ids, attention_mask, b_labels) = \
@@ -387,9 +384,9 @@ def train_multitask(rank, world_size, args):
                 optimizer.zero_grad()
                 model = get_model(model)
                 logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
-                logits.requires_grad_()
+                #logits.requires_grad_()
                 loss = nn.MSELoss(reduction="mean")(logits, b_labels)
-                loss.requires_grad_()
+                #loss.requires_grad_()
                 loss.backward()
                 optimizer.step()
                 ### STS ###
@@ -398,17 +395,23 @@ def train_multitask(rank, world_size, args):
                 optimizer.zero_grad()
                 model = get_model(model)
                 logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
-                logits.requires_grad_()
+                #logits.requires_grad_()
                 loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
-                loss.requires_grad_()
+                #loss.requires_grad_()
                 loss.backward()
                 optimizer.step()
                 ### Para ###
 
+                count = count + 1
+                if count > 3000:
+                    break
+
+
+            temp_config = config
+            temp_config = config.fine_tune_mode == "last-linear-layer"
+            save_model(model, optimizer, args, temp_config, './snli-pretrain')
             for param in model.parameters():
-                if config.fine_tune_mode == "last-linear-layer":
-                    param.requires_grad = False
-                elif config.fine_tune_mode == "full-model":
+                if config.fine_tune_mode == "full-model":
                     param.requires_grad = True
 
         # annealed sampling

@@ -13,7 +13,7 @@ def data_loader_for_snli(args):
     # read in SNLI dataset
     snli = load_dataset('snli')
     snli_train_data = SNLIDataset(snli['train'], args)
-    snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=60,
+    snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=30,
                                        collate_fn=snli_train_data.collate_fn)
 
     return snli_train_dataloader
