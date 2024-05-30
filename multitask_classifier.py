@@ -168,6 +168,23 @@ class MultitaskBERT(nn.Module):
         # we are using CrossEntropyLoss, so no need to put softmax here
         return logits
 
+    def train_snli(self, input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2, b_labels):
+        output_1 = self.forward(input_ids_1, token_type_ids, attention_mask_1, self.task_ids["sts"])
+        output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
+
+        output_1 = self.dropout(output_1)
+        output_2 = self.dropout(output_2)
+
+        output_1 = self.sts_classifier(output_1)
+        output_2 = self.sts_classifier(output_2)
+
+        temp = 0.05
+        numerator = torch.exp(F.cosine_similarity(output_1[0], output_2[0], dim=0)) / temp
+        denominator = torch.exp(F.cosine_similarity(output_1, output_2)) / temp
+        denominator = torch.sum(denominator)
+        loss = -torch.log(numerator / denominator)
+        return loss
+
     def predict_similarity(self, input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2):
         """Given a batch of pairs of sentences, outputs a single logit corresponding to how similar they are.
         Note that your output should be unnormalized (a logit).
@@ -319,18 +336,17 @@ def train(batch, device, model, type):
         attention_mask_1 = attention_mask_1.to(device)
         attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.type(torch.float32).to(device)
-        b_labels *= 5
 
-        ### STS ###
-        logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
-        loss = nn.MSELoss(reduction="mean")(logits, b_labels)
-        loss.backward()
-        ### STS ###
+        num = np.random.choice([0, 1])
 
-        ### Para ###
-        logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
-        loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
-        ### Para ###
+        if num == 0:
+            ### STS ###
+            loss = model.train_snli(token_ids, token_ids_1, token_ids_2, token_type_ids,
+                              attention_mask, attention_mask_1, attention_mask_2, b_labels)
+        else:
+            ### Para ###
+            logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
+            loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
 
     # Run backprop for the loss from the task
     loss.backward()
@@ -534,7 +550,6 @@ def train_multitask(rank, world_size, args):
                         "sts_train_loss", sts_training_loss.item(), overall_steps
                     )
             elif task_id == 3:
-                continue
                 snli_batch = task_batch
                 snli_trianing_loss = train(snli_batch, device, model, "snli")
             else:
