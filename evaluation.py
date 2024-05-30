@@ -112,15 +112,38 @@ def model_eval_multitask(sentiment_dataloader,
         sts_sent_ids = []
         if arg == 'sts' or arg == 'all':
             for step, batch in enumerate(tqdm(sts_dataloader, desc=f'sts eval', disable=TQDM_DISABLE)):
-                (b_ids, b_token_type_ids, b_mask,
-                 b_labels, b_sent_ids) = (batch['token_ids'], batch['token_type_ids'], batch['attention_mask'],
-                              batch['labels'], batch['sent_ids'])
+                (
+                    token_ids,
+                    token_ids_1,
+                    token_ids_2,
+                    token_type_ids,
+                    attention_mask,
+                    attention_mask_1,
+                    attention_mask_2,
+                    b_labels,
+                ) = (
+                    batch["token_ids"],
+                    batch["token_ids_1"],
+                    batch["token_ids_2"],
+                    batch["token_type_ids"],
+                    batch["attention_mask"],
+                    batch["attention_mask_1"],
+                    batch["attention_mask_2"],
+                    batch["labels"],
+                )
 
-                b_ids = b_ids.to(device)
-                b_mask = b_mask.to(device)
-                b_token_type_ids = b_token_type_ids.to(device)
-                
-                logits = model.predict_similarity(b_ids, b_token_type_ids, b_mask)
+                token_ids = token_ids.to(device)
+                token_ids_1 = token_ids_1.to(device)
+                token_ids_2 = token_ids_2.to(device)
+                token_type_ids = token_type_ids.to(device)
+                attention_mask = attention_mask.to(device)
+                attention_mask_1 = attention_mask_1.to(device)
+                attention_mask_2 = attention_mask_2.to(device)
+                b_labels = b_labels.type(torch.float32).to(device)
+
+                logits = model.predict_similarity(token_ids, token_ids_1, token_ids_2, token_type_ids, attention_mask,
+                                                  attention_mask_1, attention_mask_2)
+
                 y_hat = logits.flatten().cpu().numpy()
 
                 b_labels = b_labels.flatten().cpu().numpy()
@@ -187,15 +210,36 @@ def model_eval_test_multitask(sentiment_dataloader,
         sts_y_pred = []
         sts_sent_ids = []
         for step, batch in enumerate(tqdm(sts_dataloader, desc=f'sts test eval', disable=TQDM_DISABLE)):
-            (b_ids, b_token_type_ids, b_mask,
-                 b_sent_ids) = (batch['token_ids'], batch['token_type_ids'], batch['attention_mask'],
-                              batch['sent_ids'])
+            (
+                token_ids,
+                token_ids_1,
+                token_ids_2,
+                token_type_ids,
+                attention_mask,
+                attention_mask_1,
+                attention_mask_2,
+                b_labels,
+            ) = (
+                batch["token_ids"],
+                batch["token_ids_1"],
+                batch["token_ids_2"],
+                batch["token_type_ids"],
+                batch["attention_mask"],
+                batch["attention_mask_1"],
+                batch["attention_mask_2"],
+                batch["labels"],
+            )
 
-            b_ids = b_ids.to(device)
-            b_mask = b_mask.to(device)
-            b_token_type_ids = b_token_type_ids.to(device)
+            token_ids = token_ids.to(device)
+            token_ids_1 = token_ids_1.to(device)
+            token_ids_2 = token_ids_2.to(device)
+            token_type_ids = token_type_ids.to(device)
+            attention_mask = attention_mask.to(device)
+            attention_mask_1 = attention_mask_1.to(device)
+            attention_mask_2 = attention_mask_2.to(device)
+            b_labels = b_labels.type(torch.float32).to(device)
             
-            logits = model.predict_similarity(b_ids, b_token_type_ids, b_mask)
+            logits = model.predict_similarity(token_ids, token_ids_1, token_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2)
             y_hat = logits.flatten().cpu().numpy()
 
             sts_y_pred.extend(y_hat)
