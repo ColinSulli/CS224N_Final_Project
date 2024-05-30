@@ -284,6 +284,7 @@ def train(batch, device, model, type):
         token_type_ids = token_type_ids.to(device)
         attention_mask = attention_mask.to(device)
         b_labels = b_labels.type(torch.float32).to(device)
+        b_labels *= 5
 
         token_ids = token_ids.to(device)
         token_type_ids = token_type_ids.to(device)
