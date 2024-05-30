@@ -98,10 +98,10 @@ class MultitaskBERT(nn.Module):
         # last-linear-layer mode does not require updating BERT paramters.
         assert config.fine_tune_mode in ["last-linear-layer", "full-model"]
         for param in self.bert.parameters():
-            #if config.fine_tune_mode == "last-linear-layer":
-            param.requires_grad = False
-            #elif config.fine_tune_mode == "full-model":
-            #    param.requires_grad = True
+            if config.fine_tune_mode == "last-linear-layer":
+                param.requires_grad = False
+            elif config.fine_tune_mode == "full-model":
+                param.requires_grad = True
 
         # Paraphrasing: Binary classification
         # we are concatenating the embeddings of the two sentences
