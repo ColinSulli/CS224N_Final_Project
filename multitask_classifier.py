@@ -432,9 +432,9 @@ def train_multitask(rank, world_size, args):
     # reduce the batch size, I am increasing the steps per epoch
     if DEBUG:
         steps_per_epoch = 10
-        probs = [1, 1, 1]
+        probs = [1, 1, 1, 1]
     else:
-        steps_per_epoch = 1 * 4
+        steps_per_epoch = 600 * 4
         probs = [283003, 8544, 6040, 6000]
 
     for epoch in range(args.epochs):
