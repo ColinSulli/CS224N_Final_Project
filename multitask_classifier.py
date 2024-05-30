@@ -300,7 +300,6 @@ def train(batch, device, model, type):
         attention_mask = attention_mask.to(device)
         attention_mask_1 = attention_mask_1.to(device)
         attention_mask_2 = attention_mask_2.to(device)
-
         b_labels = b_labels.type(torch.float32).to(device)
 
         # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
@@ -435,7 +434,7 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [1, 1, 1]
     else:
-        steps_per_epoch = 600 * 4
+        steps_per_epoch = 1 * 4
         probs = [283003, 8544, 6040, 6000]
 
     for epoch in range(args.epochs):
