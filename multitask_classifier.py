@@ -86,12 +86,13 @@ class MultitaskBERT(nn.Module):
     def __init__(self, config):
         super(MultitaskBERT, self).__init__()
 
-        self.bert = get_pal(num_task=3)
+        self.bert = get_pal(num_task=4)
 
         self.task_ids = {
             "para": 0,
             "sst": 1,
             "sts": 2,
+            "snli": 4
         }
 
         # last-linear-layer mode does not require updating BERT paramters.
@@ -316,6 +317,7 @@ def train_multitask(rank, world_size, args):
         para_dev_dataloader,
         sst_dev_dataloader,
         sts_dev_dataloader,
+        snli_train_dataloader
     ) = data_loaders_for_train_and_validation(
         args, rank, world_size, use_multi_gpu, debug=DEBUG
     )
@@ -349,6 +351,7 @@ def train_multitask(rank, world_size, args):
         itertools.cycle(para_train_dataloader),
         itertools.cycle(sst_train_dataloader),
         itertools.cycle(sts_train_dataloader),
+        itertools.cycle(snli_train_dataloader),
     ]
 
     # Run for the specified number of epochs.
@@ -360,13 +363,13 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [1, 1, 1]
     else:
-        steps_per_epoch = 600 * 3
-        probs = [283003, 8544, 6040]
+        steps_per_epoch = 600 * 4
+        probs = [283003, 8544, 6040, 550152]
 
     for epoch in range(args.epochs):
         model.train()
 
-        if epoch < 1:
+        '''if epoch < 1:
             ### First Fine-Tune on SNLI Dataset ###
             snli_train_dataloader = data_loader_for_snli(args)
             count = 0
@@ -408,11 +411,11 @@ def train_multitask(rank, world_size, args):
 
 
             temp_config = config
-            temp_config = config.fine_tune_mode == "last-linear-layer"
+            temp_config.fine_tune_mode = "last-linear-layer"
             save_model(model, optimizer, args, temp_config, './snli-pretrain')
             for param in model.parameters():
                 if config.fine_tune_mode == "full-model":
-                    param.requires_grad = True
+                    param.requires_grad = True'''
 
         # annealed sampling
         # para, sst, sts
@@ -438,7 +441,7 @@ def train_multitask(rank, world_size, args):
             overall_steps = epoch * steps_per_epoch + step
 
             # get task_id
-            task_id = np.random.choice([0, 1, 2], p=probs)
+            task_id = np.random.choice([0, 1, 2, 3], p=probs)
             task_loader = loaders[task_id]
             task_batch = next(task_loader)
 
@@ -474,6 +477,32 @@ def train_multitask(rank, world_size, args):
                     summary_writer.add_scalar(
                         "sts_train_loss", sts_training_loss.item(), overall_steps
                     )
+            elif task_id == 3:
+                snli_batch = task_batch
+                (token_ids, token_type_ids, attention_mask, b_labels) = \
+                    (snli_batch["token_ids"], snli_batch["token_type_ids"], snli_batch["attention_mask"], snli_batch["labels"])
+
+                token_ids = token_ids.to(device)
+                token_type_ids = token_type_ids.to(device)
+                attention_mask = attention_mask.to(device)
+                b_labels = b_labels.type(torch.float32).to(device)
+
+                token_ids = token_ids.to(device)
+                token_type_ids = token_type_ids.to(device)
+                attention_mask = attention_mask.to(device)
+                b_labels = b_labels.type(torch.float32).to(device)
+
+                ### STS ###
+                logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
+                loss = nn.MSELoss(reduction="mean")(logits, b_labels)
+                loss.backward()
+                ### STS ###
+
+                ### Para ###
+                logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
+                loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
+                loss.backward()
+                ### Para ###
             else:
                 raise Exception("invalid task_id")
 
@@ -554,6 +583,7 @@ def test_multitask(args):
             para_dev_dataloader,
             sst_dev_dataloader,
             sts_dev_dataloader,
+            snli_train_dataloader,
         ) = data_loaders_for_test(args, use_multi_gpu=False, debug=DEBUG)
 
         (

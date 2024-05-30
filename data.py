@@ -12,6 +12,8 @@ from datasets import load_dataset
 def data_loader_for_snli(args):
     # read in SNLI dataset
     snli = load_dataset('snli')
+    print(f"Loaded {len(snli)} train examples from SNLI")
+
     snli_train_data = SNLIDataset(snli['train'], args)
     snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=30,
                                        collate_fn=snli_train_data.collate_fn)
@@ -30,9 +32,14 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
         args.sst_dev, args.para_dev, args.sts_dev, split="train"
     )
 
+    # read in snli data
+    snli = load_dataset('snli')
+    print(f"Loaded {len(snli['train'])} train examples from SNLI")
+
     # size of sts_train_data: 6040
     # size of sst_train_data: 8544
     # size of para_train_data: 283003
+    # size of snli_train_data: 550152
 
     # If we wish to debug the code, we can reduce the size of the data
     if debug:
@@ -42,6 +49,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
         sst_dev_data = sst_dev_data[:100]
         para_dev_data = para_dev_data[:100]
         sts_dev_data = sts_dev_data[:100]
+        snli = snli[:100]
 
     # SST Data
     sst_train_data = SentenceClassificationDataset(sst_train_data, args)
@@ -55,6 +63,9 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
     sts_train_data = SentencePairDataset(sts_train_data, args, isRegression=True)
     sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
 
+    # SNLI Data
+    snli_train_data = SNLIDataset(snli['train'], args)
+
     # Configuration for each data set
     # format: name, data, batch_size, shuffle
     datasets = [
@@ -64,6 +75,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
         ("para_dev", para_dev_data, args.batch_size, False),
         ("sts_train", sts_train_data, args.batch_size, True),
         ("sts_dev", sts_dev_data, args.batch_size, False),
+        ("snli_train", snli_train_data, args.batch_size, False)
     ]
 
     # create dataloaders
@@ -87,6 +99,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
         dataloaders["para_dev"],
         dataloaders["sst_dev"],
         dataloaders["sts_dev"],
+        dataloaders["snli_train"]
     )
 
 
