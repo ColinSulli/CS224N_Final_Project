@@ -116,7 +116,7 @@ class MultitaskBERT(nn.Module):
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Linear(config.hidden_size * 2, 1)
+        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
@@ -168,20 +168,24 @@ class MultitaskBERT(nn.Module):
         # we are using CrossEntropyLoss, so no need to put softmax here
         return logits
 
-    def predict_similarity(self, input_ids, token_type_ids, attention_mask):
+    def predict_similarity(self, input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2):
         """Given a batch of pairs of sentences, outputs a single logit corresponding to how similar they are.
         Note that your output should be unnormalized (a logit).
         """
         # concatenate inputs and attention masks
 
-        output = self.forward(
-            input_ids, token_type_ids, attention_mask, self.task_ids["sts"]
-        )
+        #output = self.forward(input_ids, token_type_ids, attention_mask, self.task_ids["sts"])
+        output_1 = self.forward(input_ids_1, token_type_ids, attention_mask_1, self.task_ids["sts"])
+        output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
 
-        output_1 = self.dropout(output)
-        output_2 = self.dropout(output)
-        output = torch.cat((output_1, output_2), dim=1)
-        logits = self.sts_classifier(output)
+        output_1 = self.dropout(output_1)
+        output_2 = self.dropout(output_2)
+
+        output_1 = self.sts_classifier(output_1)
+        output_2 = self.sts_classifier(output_2)
+
+        logits = F.cosine_similarity(output_1, output_2)
+        #logits = self.sts_classifier(output)
 
         # normalise between 0 to 5
         logits = torch.sigmoid(logits).squeeze() * 5.0
@@ -254,42 +258,68 @@ def train(batch, device, model, type):
     elif type == "sts":
         (
             token_ids,
+            token_ids_1,
+            token_ids_2,
             token_type_ids,
             attention_mask,
+            attention_mask_1,
+            attention_mask_2,
             b_labels,
         ) = (
             batch["token_ids"],
+            batch["token_ids_1"],
+            batch["token_ids_2"],
             batch["token_type_ids"],
             batch["attention_mask"],
+            batch["attention_mask_1"],
+            batch["attention_mask_2"],
             batch["labels"],
         )
 
         token_ids = token_ids.to(device)
-        token_type_ids = token_type_ids.to(
-            device
-        )  # need to modify bert embedding to use this later
+        token_ids_1 = token_ids_1.to(device)
+        token_ids_2 = token_ids_2.to(device)
+        token_type_ids = token_type_ids.to(device)
         attention_mask = attention_mask.to(device)
+        attention_mask_1 = attention_mask_1.to(device)
+        attention_mask_2 = attention_mask_2.to(device)
 
         b_labels = b_labels.type(torch.float32).to(device)
 
         # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
-        logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
+        logits = model.predict_similarity(token_ids, token_ids_1, token_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2)
         loss = nn.MSELoss(reduction="mean")(logits, b_labels)
 
     elif type == 'snli':
-        (token_ids, token_type_ids, attention_mask, b_labels) = \
-            (batch["token_ids"], batch["token_type_ids"], batch["attention_mask"], batch["labels"])
+        (
+            token_ids,
+            token_ids_1,
+            token_ids_2,
+            token_type_ids,
+            attention_mask,
+            attention_mask_1,
+            attention_mask_2,
+            b_labels,
+        ) = (
+            batch["token_ids"],
+            batch["token_ids_1"],
+            batch["token_ids_2"],
+            batch["token_type_ids"],
+            batch["attention_mask"],
+            batch["attention_mask_1"],
+            batch["attention_mask_2"],
+            batch["labels"]
+        )
 
         token_ids = token_ids.to(device)
+        token_ids_1 = token_ids_1.to(device)
+        token_ids_2 = token_ids_2.to(device)
         token_type_ids = token_type_ids.to(device)
         attention_mask = attention_mask.to(device)
+        attention_mask_1 = attention_mask_1.to(device)
+        attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.type(torch.float32).to(device)
         b_labels *= 5
-
-        token_ids = token_ids.to(device)
-        token_type_ids = token_type_ids.to(device)
-        attention_mask = attention_mask.to(device)
-        b_labels = b_labels.type(torch.float32).to(device)
 
         ### STS ###
         logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
@@ -504,6 +534,7 @@ def train_multitask(rank, world_size, args):
                         "sts_train_loss", sts_training_loss.item(), overall_steps
                     )
             elif task_id == 3:
+                continue
                 snli_batch = task_batch
                 snli_trianing_loss = train(snli_batch, device, model, "snli")
             else:

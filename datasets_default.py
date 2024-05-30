@@ -123,8 +123,12 @@ class SNLIDataset(Dataset):
     def pad_data(self, data):
         batch_size = len(data)
         token_ids = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        token_ids_1 = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        token_ids_2 = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
         token_type_ids = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
         attention_mask = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        attention_mask_1 = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        attention_mask_2 = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
         labels = torch.zeros(batch_size, 1, dtype=torch.float32 if self.isRegression else torch.long)
 
         sent_ids = []
@@ -152,12 +156,31 @@ class SNLIDataset(Dataset):
             segment_ids = [0] * (len(tokens_1) + 2) + [1] * (len(tokens_2) + 1)
             input_mask = [1] * len(tokens)
 
+            ### Colin's ###
+            input_mask_1 = [1] * len(tokens_1)
+            input_mask_2 = [1] * len(tokens_2)
+            ### Colin's ###
+
             input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+
+            ### Colin's ###
+            input_ids_1 = self.tokenizer.convert_tokens_to_ids(tokens_1)
+            input_ids_2 = self.tokenizer.convert_tokens_to_ids(tokens_2)
+            ### Colin's ###
 
             padding_length = self.max_sequence_length - len(tokens)
             input_ids.extend([0] * padding_length)
             segment_ids.extend([0] * padding_length)
             input_mask.extend([0] * padding_length)
+
+            ### Colin's ###
+            padding_length_1 = self.max_sequence_length - len(tokens_1)
+            padding_length_2 = self.max_sequence_length - len(tokens_2)
+            input_ids_1.extend([0] * padding_length_1)
+            input_ids_2.extend([0] * padding_length_2)
+            input_mask_1.extend([0] * padding_length_1)
+            input_mask_2.extend([0] * padding_length_2)
+            ### Colin's ###
 
             assert len(input_ids) == self.max_sequence_length
             assert len(input_mask) == self.max_sequence_length
@@ -168,15 +191,28 @@ class SNLIDataset(Dataset):
             attention_mask[index] = torch.Tensor(input_mask)
             labels[index] = torch.Tensor([label])
 
-        return (token_ids, token_type_ids, attention_mask, labels.squeeze(1))
+            ### Colin's ###
+            token_ids_1[index] = torch.Tensor(input_ids_1)
+            token_ids_2[index] = torch.Tensor(input_ids_2)
+            attention_mask_1[index] = torch.Tensor(input_mask_1)
+            attention_mask_2[index] = torch.Tensor(input_mask_2)
+            ### Colin's ###
+
+        return (token_ids, token_ids_1, token_ids_2, token_type_ids,
+                attention_mask, attention_mask_1, attention_mask_2, labels.squeeze(1))
 
     def collate_fn(self, all_data):
-        (token_ids, token_type_ids, attention_mask, labels) = self.pad_data(all_data)
+        (token_ids, token_ids_1, token_ids_2, token_type_ids,
+         attention_mask, attention_mask_1, attention_mask_2, labels) = self.pad_data(all_data)
 
         batched_data = {
                 'token_ids': token_ids,
+                'token_ids_1': token_ids_1,
+                'token_ids_2': token_ids_2,
                 'token_type_ids': token_type_ids,
                 'attention_mask': attention_mask,
+                'attention_mask_1': attention_mask_1,
+                'attention_mask_2': attention_mask_2,
                 'labels': labels,
             }
 
@@ -200,8 +236,12 @@ class SentencePairDataset(Dataset):
     def pad_data(self, data):
         batch_size = len(data)
         token_ids = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        token_ids_1 = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        token_ids_2 = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
         token_type_ids = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
         attention_mask = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        attention_mask_1 = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
+        attention_mask_2 = torch.zeros(batch_size, self.max_sequence_length, dtype=torch.long)
         labels = torch.zeros(batch_size, 1, dtype=torch.float32 if self.isRegression else torch.long)
         
         sent_ids = []
@@ -224,12 +264,31 @@ class SentencePairDataset(Dataset):
             segment_ids = [0] * (len(tokens_1) + 2) + [1] * (len(tokens_2) + 1)
             input_mask = [1] * len(tokens)
 
+            ### Colin's ###
+            input_mask_1 = [1] * len(tokens_1)
+            input_mask_2 = [1] * len(tokens_2)
+            ### Colin's ###
+
             input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+
+            ### Colin's ###
+            input_ids_1 = self.tokenizer.convert_tokens_to_ids(tokens_1)
+            input_ids_2 = self.tokenizer.convert_tokens_to_ids(tokens_2)
+            ### Colin's ###
             
             padding_length = self.max_sequence_length - len(tokens)
             input_ids.extend([0] * padding_length)
             segment_ids.extend([0] * padding_length)
             input_mask.extend([0] * padding_length)
+
+            ### Colin's ###
+            padding_length_1 = self.max_sequence_length - len(tokens_1)
+            padding_length_2 = self.max_sequence_length - len(tokens_2)
+            input_ids_1.extend([0] * padding_length_1)
+            input_ids_2.extend([0] * padding_length_2)
+            input_mask_1.extend([0] * padding_length_1)
+            input_mask_2.extend([0] * padding_length_2)
+            ### Colin's ###
 
             assert len(input_ids) == self.max_sequence_length
             assert len(input_mask) == self.max_sequence_length
@@ -240,18 +299,31 @@ class SentencePairDataset(Dataset):
             attention_mask[index] = torch.Tensor(input_mask)
             labels[index] = torch.Tensor([label])
             sent_ids.append(sent_id)
+
+            ### Colin's ###
+            token_ids_1[index] = torch.Tensor(input_ids_1)
+            token_ids_2[index] = torch.Tensor(input_ids_2)
+            attention_mask_1[index] = torch.Tensor(input_mask_1)
+            attention_mask_2[index] = torch.Tensor(input_mask_2)
+            ### Colin's ###
         
-        return (token_ids, token_type_ids, attention_mask, labels.squeeze(1), sent_ids)
+        return (token_ids, token_ids_1, token_ids_2, token_type_ids, attention_mask,
+                attention_mask_1, attention_mask_2, labels.squeeze(1), sent_ids)
 
     def collate_fn(self, all_data):
-        (token_ids, token_type_ids, attention_mask, labels, sent_ids) = self.pad_data(all_data)
+        (token_ids, token_ids_1, token_ids_2, token_type_ids,
+         attention_mask, attention_mask_1, attention_mask_2, labels, sent_ids) = self.pad_data(all_data)
 
         batched_data = {
                 'token_ids': token_ids,
+                'token_ids_1': token_ids_1,
+                'token_ids_2': token_ids_2,
                 'token_type_ids': token_type_ids,
                 'attention_mask': attention_mask,
+                'attention_mask_1': attention_mask_1,
+                'attention_mask_2': attention_mask_2,
                 'labels': labels,
-                'sent_ids': sent_ids
+                'sent_ids': sent_ids,
             }
 
         return batched_data
