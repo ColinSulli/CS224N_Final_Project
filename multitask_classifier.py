@@ -276,6 +276,31 @@ def train(batch, device, model, type):
         logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
         loss = nn.MSELoss(reduction="mean")(logits, b_labels)
 
+    elif type == 'snli':
+        (token_ids, token_type_ids, attention_mask, b_labels) = \
+            (batch["token_ids"], batch["token_type_ids"], batch["attention_mask"], batch["labels"])
+
+        token_ids = token_ids.to(device)
+        token_type_ids = token_type_ids.to(device)
+        attention_mask = attention_mask.to(device)
+        b_labels = b_labels.type(torch.float32).to(device)
+
+        token_ids = token_ids.to(device)
+        token_type_ids = token_type_ids.to(device)
+        attention_mask = attention_mask.to(device)
+        b_labels = b_labels.type(torch.float32).to(device)
+
+        ### STS ###
+        logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
+        loss = nn.MSELoss(reduction="mean")(logits, b_labels)
+        loss.backward()
+        ### STS ###
+
+        ### Para ###
+        logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
+        loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
+        ### Para ###
+
     # Run backprop for the loss from the task
     loss.backward()
 
@@ -364,7 +389,7 @@ def train_multitask(rank, world_size, args):
         probs = [1, 1, 1]
     else:
         steps_per_epoch = 600 * 4
-        probs = [283003, 8544, 6040, 550152]
+        probs = [283003, 8544, 6040, 6000]
 
     for epoch in range(args.epochs):
         model.train()
@@ -479,30 +504,7 @@ def train_multitask(rank, world_size, args):
                     )
             elif task_id == 3:
                 snli_batch = task_batch
-                (token_ids, token_type_ids, attention_mask, b_labels) = \
-                    (snli_batch["token_ids"], snli_batch["token_type_ids"], snli_batch["attention_mask"], snli_batch["labels"])
-
-                token_ids = token_ids.to(device)
-                token_type_ids = token_type_ids.to(device)
-                attention_mask = attention_mask.to(device)
-                b_labels = b_labels.type(torch.float32).to(device)
-
-                token_ids = token_ids.to(device)
-                token_type_ids = token_type_ids.to(device)
-                attention_mask = attention_mask.to(device)
-                b_labels = b_labels.type(torch.float32).to(device)
-
-                ### STS ###
-                logits = model.predict_similarity(token_ids, token_type_ids, attention_mask)
-                loss = nn.MSELoss(reduction="mean")(logits, b_labels)
-                loss.backward()
-                ### STS ###
-
-                ### Para ###
-                logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
-                loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
-                loss.backward()
-                ### Para ###
+                snli_trianing_loss = train(snli_batch, device, model, "snli")
             else:
                 raise Exception("invalid task_id")
 
