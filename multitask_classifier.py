@@ -189,7 +189,7 @@ class MultitaskBERT(nn.Module):
             return self.predict_similarity(input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2)
 
         temp = 0.05
-        numerator = torch.exp(F.cosine_similarity(premise_true[0], hypothesis_true[0], dim=0)) / temp
+        numerator = torch.exp(F.cosine_similarity(premise_true[0], hypothesis_true[0])) / temp
         denominator = torch.exp(F.cosine_similarity(premise_true, hypothesis_true)) / temp
         denominator = torch.sum(denominator)
         loss = -torch.log(numerator / denominator)
@@ -450,8 +450,9 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [1, 1, 1, 1]
     else:
-        steps_per_epoch = 600 * 4
-        probs = [283003, 8544, 6040, 60000]
+        steps_per_epoch = 600
+        #probs = [283003, 8544, 6040, 60000]
+        probs = [0, 0, 0, 1]
 
     for epoch in range(args.epochs):
         model.train()
