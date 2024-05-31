@@ -597,7 +597,9 @@ def train_multitask(rank, world_size, args):
                     )
             elif task_id == 3:
                 snli_batch = task_batch
-                snli_trianing_loss = train(snli_batch, device, model, "snli")
+                sts_training_loss = train(snli_batch, device, model, "sts")
+
+                #snli_trianing_loss = train(snli_batch, device, model, "snli")
             else:
                 raise Exception("invalid task_id")
 
