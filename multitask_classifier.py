@@ -386,8 +386,7 @@ def train(batch, device, model, type):
 
             #print(loss)
 
-            if loss == 0:
-                return 0
+            if loss.numel() > 1:
                 loss = nn.MSELoss(reduction="mean")(loss, b_labels)
         else:
             ### Para ###
