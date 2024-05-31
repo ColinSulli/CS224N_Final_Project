@@ -34,7 +34,8 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
 
     # read in snli data
     snli = load_dataset('snli')
-    print(f"Loaded {len(snli['train'])} train examples from SNLI")
+    snli_train_data = snli['train']
+    print(f"Loaded {len(snli_train_data)} train examples from SNLI")
 
     # size of sts_train_data: 6040
     # size of sst_train_data: 8544
@@ -49,7 +50,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
         sst_dev_data = sst_dev_data[:100]
         para_dev_data = para_dev_data[:100]
         sts_dev_data = sts_dev_data[:100]
-        snli = snli[:100]
+        snli_train_data = snli_train_data[:100]
 
     # SST Data
     sst_train_data = SentenceClassificationDataset(sst_train_data, args)
@@ -64,7 +65,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
     sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
 
     # SNLI Data
-    snli_train_data = SNLIDataset(snli['train'], args)
+    snli_train_data = SNLIDataset(snli, args)
 
     # Configuration for each data set
     # format: name, data, batch_size, shuffle

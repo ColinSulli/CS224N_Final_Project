@@ -183,8 +183,8 @@ class MultitaskBERT(nn.Module):
         output_1 = self.forward(input_ids_1, token_type_ids, attention_mask_1, self.task_ids["sts"])
         output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
 
-        output_1 = self.dropout(output_1)
-        output_2 = self.dropout(output_2)
+        #output_1 = self.dropout(output_1)
+        #output_2 = self.dropout(output_2)
 
         output_1 = self.sts_classifier(output_1)
         output_2 = self.sts_classifier(output_2)
@@ -236,8 +236,8 @@ class MultitaskBERT(nn.Module):
         output_1 = self.forward(input_ids_1, token_type_ids, attention_mask_1, self.task_ids["sts"])
         output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
 
-        output_1 = self.dropout(output_1)
-        output_2 = self.dropout(output_2)
+        #output_1 = self.dropout(output_1)
+        #output_2 = self.dropout(output_2)
 
         output_1 = self.sts_classifier(output_1)
         output_2 = self.sts_classifier(output_2)
@@ -247,6 +247,8 @@ class MultitaskBERT(nn.Module):
 
         # normalise between 0 to 5
         logits = torch.sigmoid(logits).squeeze() * 5.0
+
+        #print(logits)
 
         # we are using MSELoss, so no need to put sigmoid here
         return logits
@@ -345,6 +347,9 @@ def train(batch, device, model, type):
 
         # logits dim: B, b_labels dim: B. value of logits should be between 0 to 5
         logits = model.predict_similarity(token_ids, token_ids_1, token_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2)
+
+        #print("LOGITS ", logits)
+        #print("LABELS ", b_labels)
         loss = nn.MSELoss(reduction="mean")(logits, b_labels)
 
     elif type == 'snli':
@@ -478,7 +483,7 @@ def train_multitask(rank, world_size, args):
     # reduce the batch size, I am increasing the steps per epoch
     if DEBUG:
         steps_per_epoch = 10
-        probs = [1, 1, 1, 1]
+        probs = [0, 0, 1, 0]
     else:
         steps_per_epoch = 200
         #probs = [283003, 8544, 6040, 60000]
