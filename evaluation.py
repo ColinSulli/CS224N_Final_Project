@@ -121,6 +121,7 @@ def model_eval_multitask(sentiment_dataloader,
                     attention_mask_1,
                     attention_mask_2,
                     b_labels,
+                    b_sent_ids,
                 ) = (
                     batch["token_ids"],
                     batch["token_ids_1"],
@@ -130,6 +131,7 @@ def model_eval_multitask(sentiment_dataloader,
                     batch["attention_mask_1"],
                     batch["attention_mask_2"],
                     batch["labels"],
+                    batch["sent_ids"],
                 )
 
                 token_ids = token_ids.to(device)
