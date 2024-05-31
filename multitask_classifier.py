@@ -233,8 +233,12 @@ class MultitaskBERT(nn.Module):
         """
         # concatenate inputs and attention masks
         #output = self.forward(input_ids, token_type_ids, attention_mask, self.task_ids["sts"])
-        output_1 = self.forward(input_ids_1, token_type_ids, attention_mask_1, self.task_ids["sts"])
-        output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
+        output_1 = self.forward(input_ids, token_type_ids, attention_mask_1, self.task_ids["sts"])
+        #output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
+        output_2 = torch.flip(output_1, dims=(1,))
+
+        #print(output_1)
+        #print(output_2)
 
         #output_1 = self.dropout(output_1)
         #output_2 = self.dropout(output_2)
