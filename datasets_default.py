@@ -140,7 +140,7 @@ class SNLIDataset(Dataset):
             label = training_case['label']
 
             if label == 0:
-                label = 1
+                label = 5
             else:
                 label = 0
 
