@@ -185,7 +185,7 @@ class MultitaskBERT(nn.Module):
         hypothesis_true = output_2[premise_true_mask]
 
         #print(premise_true.size())
-        if premise_true.size() == 0:
+        if premise_true.numel() == 0:
             return self.predict_similarity(input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2)
 
         temp = 0.05
@@ -451,7 +451,7 @@ def train_multitask(rank, world_size, args):
         probs = [1, 1, 1, 1]
     else:
         steps_per_epoch = 600 * 4
-        probs = [283003, 8544, 6040, 600000000]
+        probs = [283003, 8544, 6040, 60000]
 
     for epoch in range(args.epochs):
         model.train()
