@@ -223,7 +223,7 @@ class MultitaskBERT(nn.Module):
 
         loss = -torch.log(numerator / denominator)
 
-        #print(loss)
+        print(loss)
 
         return loss
 
@@ -232,7 +232,7 @@ class MultitaskBERT(nn.Module):
         Note that your output should be unnormalized (a logit).
         """
         # concatenate inputs and attention masks
-
+        return 0
         #output = self.forward(input_ids, token_type_ids, attention_mask, self.task_ids["sts"])
         output_1 = self.forward(input_ids_1, token_type_ids, attention_mask_1, self.task_ids["sts"])
         output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
