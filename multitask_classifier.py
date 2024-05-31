@@ -209,8 +209,8 @@ class MultitaskBERT(nn.Module):
 
         temp = 0.05
         numerator = torch.exp(F.cosine_similarity(premise_true[0].unsqueeze(0), hypothesis_true[0].unsqueeze(0)) / temp)
-        denominator_pos = torch.exp(F.cosine_similarity(premise_true[0].unsqueeze(0), hypothesis_true) / temp)
-        denominator_neg = torch.exp(F.cosine_similarity(premise_true[0].unsqueeze(0), hypothesis_false) / temp)
+        denominator_pos = torch.exp(F.cosine_similarity(premise_true[0].unsqueeze(0), hypothesis_true[0]) / temp)
+        denominator_neg = torch.exp(F.cosine_similarity(premise_true[0].unsqueeze(0), hypothesis_false[0]) / temp)
 
         #print(denominator_pos)
         #print(denominator_neg)
