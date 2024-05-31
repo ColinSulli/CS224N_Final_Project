@@ -189,7 +189,7 @@ class MultitaskBERT(nn.Module):
             return self.predict_similarity(input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2)
 
         temp = 0.05
-        numerator = torch.exp(F.cosine_similarity(premise_true[0], hypothesis_true[0])) / temp
+        numerator = torch.exp(F.cosine_similarity(premise_true[0].unsqueeze(0), hypothesis_true[0].unsqueeze(0))) / temp
         denominator = torch.exp(F.cosine_similarity(premise_true, hypothesis_true)) / temp
         denominator = torch.sum(denominator)
         loss = -torch.log(numerator / denominator)
