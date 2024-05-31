@@ -203,7 +203,7 @@ class MultitaskBERT(nn.Module):
         hypothesis_false = output_2[premise_false_mask]
 
         #print(premise_true.size())
-        if premise_true.numel() == 0:
+        if premise_true.numel() == 0 or hypothesis_false.numel() == 0:
             #print("HERE2")
             return self.predict_similarity(input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2)
 
