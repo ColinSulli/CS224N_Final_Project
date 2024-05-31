@@ -215,8 +215,9 @@ class MultitaskBERT(nn.Module):
         #print(denominator_pos)
         #print(denominator_neg)
 
-        denominator = torch.sum(denominator_neg)
-        denominator = denominator_pos + denominator
+        denominator_pos = torch.sum(denominator_pos)
+        denominator_neg = torch.sum(denominator_neg)
+        denominator = denominator_pos + denominator_neg
 
         #print(denominator)
 
@@ -383,6 +384,8 @@ def train(batch, device, model, type):
             ### STS ###
             loss = model.train_snli(token_ids, token_ids_1, token_ids_2, token_type_ids,
                               attention_mask, attention_mask_1, attention_mask_2, b_labels)
+
+            #print(loss)
 
             if loss.numel() > 1:
                 loss = nn.MSELoss(reduction="mean")(loss, b_labels)
