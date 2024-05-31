@@ -75,7 +75,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
         ("para_dev", para_dev_data, args.batch_size, False),
         ("sts_train", sts_train_data, args.batch_size, True),
         ("sts_dev", sts_dev_data, args.batch_size, False),
-        ("snli_train", snli_train_data, args.batch_size, False)
+        ("snli_train", snli_train_data, 3, False)
     ]
 
     # create dataloaders

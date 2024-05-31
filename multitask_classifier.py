@@ -169,6 +169,17 @@ class MultitaskBERT(nn.Module):
         return logits
 
     def train_snli(self, input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2, b_labels):
+        #print(input_ids_1)
+        unique_vals, counts = torch.unique(input_ids_1, dim=0, return_counts=True)
+        #print(unique_vals)
+        #print(counts)
+        #freq_val = unique_vals[torch.argmax(counts)]
+        #indices = (input_ids_1[:] == freq_val).nonzero(as_tuple=True)
+        #print(indices)
+        if(counts[0] != 3):
+            #print("HERE1")
+            return self.predict_similarity(input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2)
+
         output_1 = self.forward(input_ids_1, token_type_ids, attention_mask_1, self.task_ids["sts"])
         output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
 
@@ -178,20 +189,29 @@ class MultitaskBERT(nn.Module):
         output_1 = self.sts_classifier(output_1)
         output_2 = self.sts_classifier(output_2)
 
-        premise_true = torch.mul(output_1, b_labels.view(16, 1))
+        premise_true = torch.mul(output_1, b_labels.view(3, 1))
+        #print("FIRST ", premise_true)
         premise_true_mask = ~(premise_true == 0).all(dim=1)
+        #print("FIRST MASK ", premise_true_mask)
+        premise_false_mask = ~(premise_true != 0).all(dim=1)
         premise_true = premise_true[premise_true_mask]
+        #print("SECOND ", premise_true)
+        #print("FALSE ", output_2[premise_false_mask])
+
 
         hypothesis_true = output_2[premise_true_mask]
+        hypothesis_false = output_2[premise_false_mask]
 
         #print(premise_true.size())
         if premise_true.numel() == 0:
+            #print("HERE2")
             return self.predict_similarity(input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2)
 
         temp = 0.05
         numerator = torch.exp(F.cosine_similarity(premise_true[0].unsqueeze(0), hypothesis_true[0].unsqueeze(0)) / temp)
-        denominator = torch.exp(F.cosine_similarity(output_1, output_2) / temp)
-        denominator = torch.sum(denominator)
+        denominator_pos = torch.exp(F.cosine_similarity(premise_true[0].unsqueeze(0), hypothesis_true) / temp)
+        denominator_neg = torch.exp(F.cosine_similarity(premise_true[0].unsqueeze(0), hypothesis_false) / temp)
+        denominator = torch.sum(denominator_pos + denominator_neg)
         loss = -torch.log(numerator / denominator)
 
         #print(loss)
@@ -355,8 +375,8 @@ def train(batch, device, model, type):
             ### STS ###
             loss = model.train_snli(token_ids, token_ids_1, token_ids_2, token_type_ids,
                               attention_mask, attention_mask_1, attention_mask_2, b_labels)
-            if np.isscalar(loss):
-                #print("scaler")
+
+            if loss.numel() > 1:
                 loss = nn.MSELoss(reduction="mean")(loss, b_labels)
         else:
             ### Para ###
@@ -450,7 +470,7 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [1, 1, 1, 1]
     else:
-        steps_per_epoch = 600
+        steps_per_epoch = 200
         #probs = [283003, 8544, 6040, 60000]
         probs = [0, 0, 0, 1]
 
