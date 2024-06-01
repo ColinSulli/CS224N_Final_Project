@@ -116,7 +116,7 @@ class MultitaskBERT(nn.Module):
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Linear(config.hidden_size * 2, config.hidden_size)
+        self.sts_classifier = nn.Linear(config.hidden_size * 2, config.hidden_size * 2)
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
