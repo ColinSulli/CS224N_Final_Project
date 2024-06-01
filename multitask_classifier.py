@@ -116,7 +116,7 @@ class MultitaskBERT(nn.Module):
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Linear(config.hidden_size, config.hidden_size)
+        self.sts_classifier = nn.Linear(config.hidden_size * 2, config.hidden_size)
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
@@ -238,6 +238,10 @@ class MultitaskBERT(nn.Module):
         # concatenate inputs and attention masks
         #output = self.forward(input_ids, token_type_ids, attention_mask, self.task_ids["sts"])
         output_1 = self.forward(input_ids, token_type_ids, attention_mask, self.task_ids["sts"])
+
+        output_1_drop = self.dropout(output_1)
+        output_1 = torch.cat((output_1, output_1_drop), dim=1)
+
         #output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
         output_2 = torch.flip(output_1, dims=(1,))
 
@@ -601,7 +605,7 @@ def train_multitask(rank, world_size, args):
                         "sst_train_loss", sst_training_loss.item(), overall_steps
                     )
             elif task_id == 2:
-                print("HERE")
+                #print("HERE")
                 sts_batch = task_batch
                 sts_training_loss = train(sts_batch, device, model, "sts")
                 sts_train_loss += sts_training_loss.item()
