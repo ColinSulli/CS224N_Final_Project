@@ -399,7 +399,7 @@ def train(batch, device, model, type):
         attention_mask_1 = attention_mask_1.to(device)
         attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.type(torch.float32).to(device)
-        b_labels = b_labels * 5
+        #b_labels = b_labels * 5
 
         num = np.random.choice([0, 1])
 
@@ -413,6 +413,10 @@ def train(batch, device, model, type):
             #if loss.numel() > 1:
             loss = nn.MSELoss(reduction="mean")(loss, b_labels)
         else:
+            mask_1 = b_labels == 2.5
+            mask_2 = b_labels == 5
+            b_labels[mask_1] = 0
+            b_labels[mask_2] = 1
             ### Para ###
             logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
             loss = nn.BCEWithLogitsLoss(reduction="mean")(logits, b_labels)
