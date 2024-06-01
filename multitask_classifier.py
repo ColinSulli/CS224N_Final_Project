@@ -185,6 +185,8 @@ class MultitaskBERT(nn.Module):
         output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
 
         output_1_1 = self.forward(input_ids, token_type_ids, attention_mask, self.task_ids["sts"])
+        output_1_1_drop = self.dropout(output_1_1)
+        output_1_1 = torch.cat((output_1_1, output_1_1_drop), dim=1)
         output_2_2 = torch.flip(output_1_1, dims=(1,))
 
         #output_1 = self.dropout(output_1)
@@ -393,18 +395,19 @@ def train(batch, device, model, type):
         attention_mask_1 = attention_mask_1.to(device)
         attention_mask_2 = attention_mask_2.to(device)
         b_labels = b_labels.type(torch.float32).to(device)
+        b_labels = b_labels * 5
 
         num = np.random.choice([0, 1])
 
         if num == 0:
             ### STS ###
-            loss = model.train_snli(token_ids, token_ids_1, token_ids_2, token_type_ids,
-                              attention_mask, attention_mask_1, attention_mask_2, b_labels)
+            loss = model.predict_similarity(token_ids, token_ids_1, token_ids_2, token_type_ids,
+                              attention_mask, attention_mask_1, attention_mask_2)
 
             #print(loss)
 
-            if loss.numel() > 1:
-                loss = nn.MSELoss(reduction="mean")(loss, b_labels)
+            #if loss.numel() > 1:
+            loss = nn.MSELoss(reduction="mean")(loss, b_labels)
         else:
             ### Para ###
             logits = model.predict_paraphrase(token_ids, token_type_ids, attention_mask)
@@ -497,9 +500,9 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [0, 0, 0, 1]
     else:
-        steps_per_epoch = 600 * 3
-        probs = [283003, 8544, 6040, 0]
-        #probs = [0, 0, 0, 1]
+        steps_per_epoch = 1000
+        #probs = [283003, 8544, 6040, 1000]
+        probs = [0, 0, 1, 1]
 
     for epoch in range(args.epochs):
         model.train()
@@ -701,7 +704,6 @@ def test_multitask(args):
             para_dev_dataloader,
             sst_dev_dataloader,
             sts_dev_dataloader,
-            snli_train_dataloader,
         ) = data_loaders_for_test(args, use_multi_gpu=False, debug=DEBUG)
 
         (

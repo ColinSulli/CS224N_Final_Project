@@ -64,7 +64,7 @@ def model_eval_multitask(sentiment_dataloader,
         sst_y_true = []
         sst_y_pred = []
         sst_sent_ids = []
-        if arg == 'sst' or arg == 'all':
+        if False: #arg == 'sst' or arg == 'all':
             for step, batch in enumerate(tqdm(sentiment_dataloader, desc=f'sst eval', disable=TQDM_DISABLE)):
                 b_ids, b_token_type_ids, b_mask, b_labels, b_sent_ids = batch['token_ids'], batch['token_type_ids'], batch['attention_mask'], batch['labels'], batch['sent_ids']
 
@@ -87,7 +87,7 @@ def model_eval_multitask(sentiment_dataloader,
         para_y_true = []
         para_y_pred = []
         para_sent_ids = []
-        if arg == 'para' or arg == 'all':
+        if False:#arg == 'para' or arg == 'all':
             for step, batch in enumerate(tqdm(paraphrase_dataloader, desc=f'para eval', disable=TQDM_DISABLE)):
                 (b_ids, b_token_type_ids, b_mask,
                  b_labels, b_sent_ids) = (batch['token_ids'], batch['token_type_ids'], batch['attention_mask'],
