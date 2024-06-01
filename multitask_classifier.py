@@ -116,7 +116,7 @@ class MultitaskBERT(nn.Module):
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
-        self.sts_classifier = nn.Linear(config.hidden_size * 2, config.hidden_size * 2)
+        self.sts_classifier = nn.Linear(config.hidden_size * 4, 1)
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
@@ -242,10 +242,14 @@ class MultitaskBERT(nn.Module):
         output_1 = self.forward(input_ids, token_type_ids, attention_mask, self.task_ids["sts"])
 
         output_1_drop = self.dropout(output_1)
+        output_2_drop = self.dropout(output_1)
+        output_3_drop = self.dropout(output_1)
         output_1 = torch.cat((output_1, output_1_drop), dim=1)
+        output_1 = torch.cat((output_1, output_2_drop), dim=1)
+        output_1 = torch.cat((output_1, output_3_drop), dim=1)
 
         #output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
-        output_2 = torch.flip(output_1, dims=(1,))
+        #output_2 = torch.flip(output_1, dims=(1,))
 
         #print(output_1)
         #print(output_2)
@@ -253,10 +257,10 @@ class MultitaskBERT(nn.Module):
         #output_1 = self.dropout(output_1)
         #output_2 = self.dropout(output_2)
 
-        output_1 = self.sts_classifier(output_1)
-        output_2 = self.sts_classifier(output_2)
+        logits = self.sts_classifier(output_1)
+        #output_2 = self.sts_classifier(output_2)
 
-        logits = F.cosine_similarity(output_1, output_2)
+        #logits = F.cosine_similarity(output_1, output_2)
         #logits = self.sts_classifier(output)
 
         # normalise between 0 to 5
@@ -500,7 +504,7 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [0, 0, 0, 1]
     else:
-        steps_per_epoch = 1000
+        steps_per_epoch = 600
         #probs = [283003, 8544, 6040, 1000]
         probs = [0, 0, 1, 0]
 
