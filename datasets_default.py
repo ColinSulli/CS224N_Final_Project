@@ -138,11 +138,13 @@ class SNLIDataset(Dataset):
             sent1 = training_case['premise']
             sent2 = training_case['hypothesis']
             label = training_case['label']
-
-            if label == 0:
-                label = 1
-            else:
+            label = label * 5
+            if label == 10:
                 label = 0
+            elif label == 5:
+                label = 2.5
+            else:
+                label = 5
 
             tokens_1 = self.tokenizer.tokenize(sent1)
             tokens_2 = self.tokenizer.tokenize(sent2)
