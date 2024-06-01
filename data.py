@@ -65,7 +65,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
     sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
 
     # SNLI Data
-    snli_train_data = SNLIDataset(snli, args)
+    snli_train_data = SNLIDataset(snli_train_data, args)
 
     # Configuration for each data set
     # format: name, data, batch_size, shuffle

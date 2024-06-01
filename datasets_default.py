@@ -140,13 +140,12 @@ class SNLIDataset(Dataset):
             label = training_case['label']
 
             if label == 0:
-                label = 5
+                label = 1
             else:
                 label = 0
 
             tokens_1 = self.tokenizer.tokenize(sent1)
             tokens_2 = self.tokenizer.tokenize(sent2)
-
             # Modifies `tokens_a` and `tokens_b` in place so that the total
             # length is less than the specified length.
             # Account for [CLS], [SEP], [SEP] with "- 3"

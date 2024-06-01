@@ -92,7 +92,7 @@ class MultitaskBERT(nn.Module):
             "para": 0,
             "sst": 1,
             "sts": 2,
-            "snli": 4
+            "snli": 3,
         }
 
         # last-linear-layer mode does not require updating BERT paramters.
@@ -169,6 +169,7 @@ class MultitaskBERT(nn.Module):
         return logits
 
     def train_snli(self, input_ids, input_ids_1, input_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2, b_labels):
+
         #print(input_ids_1)
         unique_vals, counts = torch.unique(input_ids_1, dim=0, return_counts=True)
         #print(unique_vals)
@@ -183,13 +184,16 @@ class MultitaskBERT(nn.Module):
         output_1 = self.forward(input_ids_1, token_type_ids, attention_mask_1, self.task_ids["sts"])
         output_2 = self.forward(input_ids_2, token_type_ids, attention_mask_2, self.task_ids["sts"])
 
+        output_1_1 = self.forward(input_ids, token_type_ids, attention_mask, self.task_ids["sts"])
+        output_2_2 = torch.flip(output_1_1, dims=(1,))
+
         #output_1 = self.dropout(output_1)
         #output_2 = self.dropout(output_2)
 
-        output_1 = self.sts_classifier(output_1)
-        output_2 = self.sts_classifier(output_2)
+        output_1_1 = self.sts_classifier(output_1_1)
+        output_2_2 = self.sts_classifier(output_2_2)
 
-        premise_true = torch.mul(output_1, b_labels.view(3, 1))
+        premise_true = torch.mul(output_1_1, b_labels.view(3, 1))
         #print("FIRST ", premise_true)
         premise_true_mask = ~(premise_true == 0).all(dim=1)
         #print("FIRST MASK ", premise_true_mask)
@@ -199,8 +203,8 @@ class MultitaskBERT(nn.Module):
         #print("FALSE ", output_2[premise_false_mask])
 
 
-        hypothesis_true = output_2[premise_true_mask]
-        hypothesis_false = output_2[premise_false_mask]
+        hypothesis_true = output_2_2[premise_true_mask]
+        hypothesis_false = output_2_2[premise_false_mask]
 
         #print(premise_true.size())
         if premise_true.numel() == 0 or hypothesis_false.numel() == 0:
@@ -443,7 +447,7 @@ def train_multitask(rank, world_size, args):
         para_dev_dataloader,
         sst_dev_dataloader,
         sts_dev_dataloader,
-        snli_train_dataloader
+        snli_train_dataloader,
     ) = data_loaders_for_train_and_validation(
         args, rank, world_size, use_multi_gpu, debug=DEBUG
     )
@@ -487,11 +491,11 @@ def train_multitask(rank, world_size, args):
     # reduce the batch size, I am increasing the steps per epoch
     if DEBUG:
         steps_per_epoch = 10
-        probs = [0, 0, 1, 0]
+        probs = [0, 0, 0, 1]
     else:
         steps_per_epoch = 200
         #probs = [283003, 8544, 6040, 60000]
-        probs = [0, 0, 1, 0]
+        probs = [0, 0, 0, 1]
 
     for epoch in range(args.epochs):
         model.train()
@@ -569,7 +573,9 @@ def train_multitask(rank, world_size, args):
 
             # get task_id
             task_id = np.random.choice([0, 1, 2, 3], p=probs)
+
             task_loader = loaders[task_id]
+
             task_batch = next(task_loader)
 
             # take a step
@@ -595,6 +601,7 @@ def train_multitask(rank, world_size, args):
                         "sst_train_loss", sst_training_loss.item(), overall_steps
                     )
             elif task_id == 2:
+                print("HERE")
                 sts_batch = task_batch
                 sts_training_loss = train(sts_batch, device, model, "sts")
                 sts_train_loss += sts_training_loss.item()
@@ -605,6 +612,7 @@ def train_multitask(rank, world_size, args):
                         "sts_train_loss", sts_training_loss.item(), overall_steps
                     )
             elif task_id == 3:
+
                 snli_batch = task_batch
                 sts_training_loss = train(snli_batch, device, model, "sts")
 
