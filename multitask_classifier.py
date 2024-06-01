@@ -426,6 +426,16 @@ def train(batch, device, model, type):
 
     return loss
 
+def warmup_decay(current_step):
+    target_steps = 10000
+    # warmup to 10,000 steps
+    if current_step < target_steps:
+        return (current_step / target_steps)
+    # decay after target steps:
+    else:
+        # 5 epochs, 2400 steps
+        total_train_steps = 5 * 2400
+        return max(0.0, float(total_train_steps - current_step) / float(max(1, total_train_steps - target_steps)))
 
 def train_multitask(rank, world_size, args):
     """Train MultitaskBERT.
@@ -485,7 +495,8 @@ def train_multitask(rank, world_size, args):
         model = DDP(model, device_ids=[rank])
 
     lr = args.lr
-    optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.01)
+    optimizer = AdamW(model.parameters(), lr=lr)
+    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
     best_overall_accuracy = 0
 
     # cycle_sst_loader = itertools.cycle(sst_train_dataloader)
@@ -508,9 +519,11 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [0, 0, 0, 1]
     else:
-        steps_per_epoch = 600
-        #probs = [283003, 8544, 6040, 1000]
-        probs = [1, 1, 1, 1]
+        steps_per_epoch = 600 * 4
+        probs = [50000, 8544, 6040, 8000]
+        #probs = [1, 1, 1, 1]
+
+
 
     for epoch in range(args.epochs):
         model.train()
@@ -636,6 +649,7 @@ def train_multitask(rank, world_size, args):
                 raise Exception("invalid task_id")
 
             optimizer.step()
+            lr_scheduler.step()
 
         (
             sst_dev_acc,
