@@ -138,13 +138,11 @@ class SNLIDataset(Dataset):
             sent1 = training_case['premise']
             sent2 = training_case['hypothesis']
             label = training_case['label']
-            label = label * 5
-            if label == 10:
-                label = 0
-            elif label == 5:
-                label = 2.5
+            #label = label * 5
+            if label == 0:
+                label = 1
             else:
-                label = 5
+                label = 0
 
             tokens_1 = self.tokenizer.tokenize(sent1)
             tokens_2 = self.tokenizer.tokenize(sent2)
@@ -198,7 +196,6 @@ class SNLIDataset(Dataset):
             attention_mask_1[index] = torch.Tensor(input_mask_1)
             attention_mask_2[index] = torch.Tensor(input_mask_2)
             ### Colin's ###
-
         return (token_ids, token_ids_1, token_ids_2, token_type_ids,
                 attention_mask, attention_mask_1, attention_mask_2, labels.squeeze(1))
 
