@@ -27,10 +27,11 @@ def preprocess_string(s):
 
 
 class SentenceClassificationDataset(Dataset):
-    def __init__(self, dataset, args):
+    def __init__(self, dataset, args, imdb_dataset=False):
         self.dataset = dataset
         self.p = args
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        self.imdb_dataset = imdb_dataset
 
     def __len__(self):
         return len(self.dataset)
@@ -43,6 +44,9 @@ class SentenceClassificationDataset(Dataset):
         sents = [x[0] for x in data]
         labels = [x[1] for x in data]
         sent_ids = [x[2] for x in data]
+
+        if(self.imdb_dataset):
+            sent_ids = sent_ids * 4
 
         encoding = self.tokenizer(sents, return_tensors='pt', padding=True, truncation=True)
         token_ids = torch.LongTensor(encoding['input_ids'])
@@ -141,6 +145,8 @@ class SNLIDataset(Dataset):
             #label = label * 5
             if label == 0:
                 label = 1
+            elif label == 1:
+                continue
             else:
                 label = 0
 
@@ -398,8 +404,9 @@ class SentencePairTestDataset(Dataset):
         return batched_data
 
 
-def load_multitask_data(sentiment_filename,paraphrase_filename,similarity_filename,split='train'):
+def load_multitask_data(sentiment_filename, imdb_filename, paraphrase_filename,similarity_filename,split='train'):
     sentiment_data = []
+    imdb_sentiment_data = []
     num_labels = {}
     if split == 'test':
         with open(sentiment_filename, 'r') as fp:
@@ -416,8 +423,17 @@ def load_multitask_data(sentiment_filename,paraphrase_filename,similarity_filena
                 if label not in num_labels:
                     num_labels[label] = len(num_labels)
                 sentiment_data.append((sent, label,sent_id))
+        with open(imdb_filename, 'r') as fp:
+            for record in csv.DictReader(fp, delimiter='\t'):
+                sent = record['sentence'].lower().strip()
+                sent_id = record['id'].lower().strip()
+                label = int(record['sentiment'].strip())
+                if label not in num_labels:
+                    num_labels[label] = len(num_labels)
+                imdb_sentiment_data.append((sent, label, sent_id))
 
     print(f"Loaded {len(sentiment_data)} {split} examples from {sentiment_filename}")
+    print(f"Loaded {len(imdb_sentiment_data)} {split} examples from {imdb_filename}")
 
     paraphrase_data = []
     if split == 'test':
@@ -459,4 +475,4 @@ def load_multitask_data(sentiment_filename,paraphrase_filename,similarity_filena
 
     print(f"Loaded {len(similarity_data)} {split} examples from {similarity_filename}")
 
-    return sentiment_data, num_labels, paraphrase_data, similarity_data
+    return sentiment_data, imdb_sentiment_data, num_labels, paraphrase_data, similarity_data

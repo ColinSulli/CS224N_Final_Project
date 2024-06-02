@@ -30,7 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from data import data_loaders_for_test, data_loaders_for_train_and_validation, data_loader_for_snli
+from data import data_loaders_for_test, data_loaders_for_train_and_validation
 from evaluation import model_eval_multitask, model_eval_test_multitask
 from optimizer import AdamW
 from pals.pal import get_pal
@@ -91,8 +91,9 @@ class MultitaskBERT(nn.Module):
         self.task_ids = {
             "para": 0,
             "sst": 1,
-            "sts": 2,
-            "snli": 3,
+            "sst_imdb": 2,
+            "sts": 3,
+            "snli": 4,
         }
 
         # last-linear-layer mode does not require updating BERT paramters.
@@ -455,6 +456,7 @@ def train_multitask(rank, world_size, args):
         sentiment_labels,
         para_train_dataloader,
         sst_train_dataloader,
+        imdb_train_dataloader,
         sts_train_dataloader,
         para_dev_dataloader,
         sst_dev_dataloader,
@@ -493,6 +495,7 @@ def train_multitask(rank, world_size, args):
     loaders = [
         itertools.cycle(para_train_dataloader),
         itertools.cycle(sst_train_dataloader),
+        itertools.cycle(imdb_train_dataloader),
         itertools.cycle(sts_train_dataloader),
         itertools.cycle(snli_train_dataloader),
     ]
@@ -508,7 +511,7 @@ def train_multitask(rank, world_size, args):
     else:
         steps_per_epoch = 600 * 3
         #probs = [10, 1, 1, .5]
-        probs = [283003, 8544, 6040, 8000]
+        probs = [283003, 8544, 1707, 6040, 8000]
         #probs = [1, 1, 1, 1]
 
 
@@ -588,7 +591,7 @@ def train_multitask(rank, world_size, args):
             overall_steps = epoch * steps_per_epoch + step
 
             # get task_id
-            task_id = np.random.choice([0, 1, 2, 3], p=probs)
+            task_id = np.random.choice([0, 1, 2, 3, 4], p=probs)
 
             task_loader = loaders[task_id]
 
@@ -606,17 +609,19 @@ def train_multitask(rank, world_size, args):
                     summary_writer.add_scalar(
                         "para_train_loss", para_training_loss.item(), overall_steps
                     )
-            elif task_id == 1:
+            elif task_id == 1 or task_id == 2:
                 sst_batch = task_batch
                 sst_training_loss = train(sst_batch, device, model, "sst")
                 sst_train_loss += sst_training_loss.item()
                 sst_num_batches += 1
 
+                #print(task_id, " ", task_batch)
+
                 if rank == 0 and step % 10 == 0:
                     summary_writer.add_scalar(
                         "sst_train_loss", sst_training_loss.item(), overall_steps
                     )
-            elif task_id == 2:
+            elif task_id == 3:
                 #print("HERE")
                 sts_batch = task_batch
                 sts_training_loss = train(sts_batch, device, model, "sts")
@@ -627,7 +632,7 @@ def train_multitask(rank, world_size, args):
                     summary_writer.add_scalar(
                         "sts_train_loss", sts_training_loss.item(), overall_steps
                     )
-            elif task_id == 3:
+            elif task_id == 4:
 
                 snli_batch = task_batch
                 sts_training_loss = train(snli_batch, device, model, "snli")

@@ -9,27 +9,16 @@ from datasets_default import (
 from torch.utils.data import DistributedSampler, DataLoader
 from datasets import load_dataset
 
-def data_loader_for_snli(args):
-    # read in SNLI dataset
-    snli = load_dataset('snli')
-    print(f"Loaded {len(snli)} train examples from SNLI")
-
-    snli_train_data = SNLIDataset(snli['train'], args)
-    snli_train_dataloader = DataLoader(snli_train_data, shuffle=False, batch_size=30,
-                                       collate_fn=snli_train_data.collate_fn)
-
-    return snli_train_dataloader
-
-
 def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=False, debug=False):
     # Create the data and its corresponding datasets and dataloader.
-    sst_train_data, sentiment_labels, para_train_data, sts_train_data = (
+    imdb_file = 'data/ids-cfimdb-train.csv'
+    sst_train_data, imdb_train_data, sentiment_labels, para_train_data, sts_train_data = (
         load_multitask_data(
-            args.sst_train, args.para_train, args.sts_train, split="train"
+            args.sst_train, imdb_file, args.para_train, args.sts_train, split="train"
         )
     )
-    sst_dev_data, sentiment_labels, para_dev_data, sts_dev_data = load_multitask_data(
-        args.sst_dev, args.para_dev, args.sts_dev, split="train"
+    sst_dev_data, imdb_dev_data, sentiment_labels, para_dev_data, sts_dev_data = load_multitask_data(
+        args.sst_dev, imdb_file, args.para_dev, args.sts_dev, split="train"
     )
 
     # read in snli data
@@ -45,6 +34,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
     # If we wish to debug the code, we can reduce the size of the data
     if debug:
         sst_train_data = sst_train_data[:100]
+        imdb_train_data = imdb_train_data[:100]
         para_train_data = para_train_data[:100]
         sts_train_data = sts_train_data[:100]
         sst_dev_data = sst_dev_data[:100]
@@ -55,6 +45,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
     # SST Data
     sst_train_data = SentenceClassificationDataset(sst_train_data, args)
     sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
+    imdb_train_data = SentenceClassificationDataset(sst_train_data, args, True)
 
     # Para Data
     para_train_data = SentencePairDataset(para_train_data, args)
@@ -71,12 +62,13 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
     # format: name, data, batch_size, shuffle
     datasets = [
         ("sst_train", sst_train_data, args.batch_size, True),
+        ("imdb_train", imdb_train_data, args.batch_size, True),
         ("sst_dev", sst_dev_data, args.batch_size, False),
         ("para_train", para_train_data, args.batch_size, True),
         ("para_dev", para_dev_data, args.batch_size, False),
         ("sts_train", sts_train_data, args.batch_size, True),
         ("sts_dev", sts_dev_data, args.batch_size, False),
-        ("snli_train", snli_train_data, 3, False)
+        ("snli_train", snli_train_data, args.batch_size, False)
     ]
 
     # create dataloaders
@@ -96,6 +88,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
         sentiment_labels,
         dataloaders["para_train"],
         dataloaders["sst_train"],
+        dataloaders["imdb_train"],
         dataloaders["sts_train"],
         dataloaders["para_dev"],
         dataloaders["sst_dev"],
