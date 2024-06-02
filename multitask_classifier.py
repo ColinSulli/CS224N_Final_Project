@@ -112,7 +112,7 @@ class MultitaskBERT(nn.Module):
         # negative, somewhat negative, neutral, somewhat positive, or positive.
         # according to documentation of SST, there are 5 labels
         assert len(config.sentiment_labels) == 5
-        self.sst_classifier = nn.Linear(config.hidden_size, 5)
+        self.sst_classifier = nn.Linear(config.hidden_size * 2, 5)
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
@@ -162,8 +162,9 @@ class MultitaskBERT(nn.Module):
             task_id=self.task_ids["sst"],
         )
 
-        pooler_output = self.dropout(pooler_output)
-        logits = self.sst_classifier(pooler_output).squeeze()
+        output_cat = self.dropout(pooler_output)
+        output = torch.cat((pooler_output, output_cat), dim=1)
+        logits = self.sst_classifier(output).squeeze()
 
         # we are using CrossEntropyLoss, so no need to put softmax here
         return logits
@@ -507,8 +508,8 @@ def train_multitask(rank, world_size, args):
         probs = [0, 0, 0, 1]
     else:
         steps_per_epoch = 600 * 3
-        probs = [10, 1, 1, .5]
-        #probs = [283003, 8544, 6040, 8000]
+        #probs = [20, 1, 1, .5]
+        probs = [283003, 8544, 6040, 8000]
         #probs = [1, 1, 1, 1]
 
 
