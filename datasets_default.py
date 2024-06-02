@@ -423,14 +423,15 @@ def load_multitask_data(sentiment_filename, imdb_filename, paraphrase_filename,s
                 if label not in num_labels:
                     num_labels[label] = len(num_labels)
                 sentiment_data.append((sent, label,sent_id))
-        with open(imdb_filename, 'r') as fp:
-            for record in csv.DictReader(fp, delimiter='\t'):
-                sent = record['sentence'].lower().strip()
-                sent_id = record['id'].lower().strip()
-                label = int(record['sentiment'].strip())
-                if label not in num_labels:
-                    num_labels[label] = len(num_labels)
-                imdb_sentiment_data.append((sent, label, sent_id))
+        if(split == 'train'):
+            with open(imdb_filename, 'r') as fp:
+                for record in csv.DictReader(fp, delimiter='\t'):
+                    sent = record['sentence'].lower().strip()
+                    sent_id = record['id'].lower().strip()
+                    label = int(record['sentiment'].strip())
+                    if label not in num_labels:
+                        num_labels[label] = len(num_labels)
+                    imdb_sentiment_data.append((sent, label, sent_id))
 
     print(f"Loaded {len(sentiment_data)} {split} examples from {sentiment_filename}")
     print(f"Loaded {len(imdb_sentiment_data)} {split} examples from {imdb_filename}")

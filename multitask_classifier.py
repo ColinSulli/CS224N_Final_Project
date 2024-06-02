@@ -509,7 +509,7 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [0, 0, 0, 1]
     else:
-        steps_per_epoch = 1 * 3
+        steps_per_epoch = 600 * 3
         #probs = [10, 1, 1, .5]
         #probs = [283003, 8544, 1707, 6040, 8000]
         #probs = [1, 1, 1, 1]
@@ -613,8 +613,8 @@ def train_multitask(rank, world_size, args):
             elif task_id == 1 or task_id == 2:
                 sst_batch = task_batch
 
-                #if(task_id == 2):
-                    #print(sst_batch)
+                if(task_id == 2):
+                    print(sst_batch)
 
                 sst_training_loss = train(sst_batch, device, model, "sst")
                 sst_train_loss += sst_training_loss.item()

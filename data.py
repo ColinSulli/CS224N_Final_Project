@@ -45,7 +45,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
     # SST Data
     sst_train_data = SentenceClassificationDataset(sst_train_data, args)
     sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
-    imdb_train_data = SentenceClassificationDataset(sst_train_data, args, True)
+    imdb_train_data = SentenceClassificationDataset(imdb_train_data, args, True)
 
     # Para Data
     para_train_data = SentencePairDataset(para_train_data, args)
