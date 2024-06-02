@@ -112,7 +112,7 @@ class MultitaskBERT(nn.Module):
         # negative, somewhat negative, neutral, somewhat positive, or positive.
         # according to documentation of SST, there are 5 labels
         assert len(config.sentiment_labels) == 5
-        self.sst_classifier = nn.Linear(config.hidden_size * 2, 5)
+        self.sst_classifier = nn.Linear(config.hidden_size * 2, 1)
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
@@ -165,6 +165,7 @@ class MultitaskBERT(nn.Module):
         output_cat = self.dropout(pooler_output)
         output = torch.cat((pooler_output, output_cat), dim=1)
         logits = self.sst_classifier(output).squeeze()
+        logits = torch.sigmoid(logits) * 4
 
         # we are using CrossEntropyLoss, so no need to put softmax here
         return logits
@@ -286,8 +287,11 @@ def train(batch, device, model, type):
         b_ids = b_ids.to(device)
         b_token_type_ids = b_token_type_ids.to(device)
         b_mask = b_mask.to(device)
-        b_labels = b_labels.to(device)
+        b_labels = b_labels.type(torch.float32).to(device)
         logits = model.predict_sentiment(b_ids, b_token_type_ids, b_mask)
+        logits = torch.round(logits)
+        #print("LOGITS ", logits)
+        #print("LABELS ", b_labels)
 
         # logits dim: B, class_size. b_labels dim: B, (class indices)
         # expects un-normalised logits
@@ -507,10 +511,10 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [0, 0, 0, 1]
     else:
-        steps_per_epoch = 600 * 3
+        steps_per_epoch = 600 * 4
         #probs = [20, 1, 1, .5]
-        probs = [283003, 8544, 6040, 8000]
-        #probs = [1, 1, 1, 1]
+        #probs = [283003, 8544, 6040, 8000]
+        probs = [0, 1, 0, 0]
 
 
 
