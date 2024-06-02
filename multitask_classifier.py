@@ -117,7 +117,7 @@ class MultitaskBERT(nn.Module):
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
         self.sts_classifier = nn.Linear(config.hidden_size * 2, 1)
-        self.dropout = nn.Dropout(0.3)
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
         "Takes a batch of sentences and produces embeddings for them."
@@ -142,7 +142,7 @@ class MultitaskBERT(nn.Module):
         output_2 = self.dropout(output)
         output = torch.cat((output_1, output_2), dim=1)
 
-        logits = self.para_classifier(output).squeeze()
+        logits = self.sts_classifier(output).squeeze()
 
         # we are using BCEWithLogitLoss, so no need to put sigmoid here
         return logits
@@ -440,7 +440,7 @@ def train_multitask(rank, world_size, args):
         device = torch.device("cpu")
 
     if rank == 0:
-        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-pal-cse-weightdecay-hyperparams"
+        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-pal-cse-weightdecay-hyperparams-relational_layer"
         summary_writer = SummaryWriter(f"runs/{run_name}")
         p_print(f"\n\n\n*** Train multitask {run_name} ***")
         p_print("device: {}, debug: {}".format(device, DEBUG))
@@ -482,7 +482,7 @@ def train_multitask(rank, world_size, args):
         model = DDP(model, device_ids=[rank])
 
     lr = args.lr
-    optimizer = AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.01)
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
     best_overall_accuracy = 0
 
