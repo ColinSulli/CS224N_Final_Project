@@ -72,14 +72,23 @@ def model_eval_multitask(sentiment_dataloader,
                 b_token_type_ids = b_token_type_ids.to(device)
                 b_mask = b_mask.to(device)
 
-                logits = model.predict_sentiment(b_ids, b_token_type_ids, b_mask)
-                y_hat = logits.argmax(dim=-1).flatten().cpu().numpy()
+                logits = model.predict_sentiment(b_ids, b_token_type_ids, b_mask, False)
+
+                #print("LOGITS ", logits)
+
+                y_hat = logits.flatten().cpu().numpy()
                 
                 b_labels = b_labels.flatten().cpu().numpy()
+
+                #print("L ", logits)
+                #print("ID ", b_labels)
 
                 sst_y_pred.extend(y_hat)
                 sst_y_true.extend(b_labels)
                 sst_sent_ids.extend(b_sent_ids)
+
+            #print(sst_y_pred)
+            #print(sst_y_true)
 
             sentiment_accuracy = np.mean(np.array(sst_y_pred) == np.array(sst_y_true))
 
@@ -184,7 +193,7 @@ def model_eval_test_multitask(sentiment_dataloader,
             b_token_type_ids = b_token_type_ids.to(device)
             b_mask = b_mask.to(device)
 
-            logits = model.predict_sentiment(b_ids, b_token_type_ids, b_mask)
+            logits = model.predict_sentiment(b_ids, b_token_type_ids, b_mask, False)
             y_hat = logits.argmax(dim=-1).flatten().cpu().numpy()
 
             sst_y_pred.extend(y_hat)

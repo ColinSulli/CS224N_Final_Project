@@ -147,7 +147,7 @@ class MultitaskBERT(nn.Module):
         # we are using BCEWithLogitLoss, so no need to put sigmoid here
         return logits
 
-    def predict_sentiment(self, input_ids, token_type_ids, attention_mask):
+    def predict_sentiment(self, input_ids, token_type_ids, attention_mask, train):
         """Given a batch of sentences, outputs logits for classifying sentiment.
         There are 5 sentiment classes:
         (0 - negative, 1- somewhat negative, 2- neutral, 3- somewhat positive, 4- positive)
@@ -166,7 +166,9 @@ class MultitaskBERT(nn.Module):
         output = torch.cat((pooler_output, output_cat), dim=1)
         logits = self.sst_classifier(output).squeeze()
         logits = torch.sigmoid(logits) * 4
-
+        logits = torch.round(logits)
+        if train == False:
+            logits = logits.type(torch.int32)
         # we are using CrossEntropyLoss, so no need to put softmax here
         return logits
 
@@ -288,14 +290,14 @@ def train(batch, device, model, type):
         b_token_type_ids = b_token_type_ids.to(device)
         b_mask = b_mask.to(device)
         b_labels = b_labels.type(torch.float32).to(device)
-        logits = model.predict_sentiment(b_ids, b_token_type_ids, b_mask)
-        logits = torch.round(logits)
+        logits = model.predict_sentiment(b_ids, b_token_type_ids, b_mask, True)
+
         #print("LOGITS ", logits)
         #print("LABELS ", b_labels)
 
         # logits dim: B, class_size. b_labels dim: B, (class indices)
         # expects un-normalised logits
-        loss = nn.CrossEntropyLoss(reduction="mean")(logits, b_labels)
+        loss = nn.CrossEntropyLoss(reduction="mean")(logits.type(torch.float32), b_labels)
 
     elif type == "para":
         (
@@ -509,12 +511,12 @@ def train_multitask(rank, world_size, args):
     # reduce the batch size, I am increasing the steps per epoch
     if DEBUG:
         steps_per_epoch = 10
-        probs = [0, 0, 0, 1]
+        probs = [1, 1, 1, 1]
     else:
-        steps_per_epoch = 600 * 1
+        steps_per_epoch = 600 * 3
         #probs = [20, 1, 1, .5]
-        #probs = [283003, 8544, 6040, 8000]
-        probs = [0, 1, 0, 0]
+        probs = [283003, 8544, 6040, 8000]
+        #probs = [1, 1, 1, 1]
 
 
 
