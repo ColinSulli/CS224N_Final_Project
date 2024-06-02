@@ -98,7 +98,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
 
 
 def data_loaders_for_test(args, use_multi_gpu=False, debug=False):
-    imdb_file = 'data/ids-cfimdb-test.csv'
+    imdb_file = 'data/ids-cfimdb-test-student.csv'
     sst_test_data, imdb_test_data, num_labels, para_test_data, sts_test_data = load_multitask_data(
         args.sst_test, imdb_file, args.para_test, args.sts_test, split="test"
     )
