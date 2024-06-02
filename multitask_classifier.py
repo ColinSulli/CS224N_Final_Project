@@ -613,7 +613,7 @@ def train_multitask(rank, world_size, args):
             elif task_id == 1 or task_id == 2:
                 sst_batch = task_batch
 
-                if(task_id == 2):
+                #if(task_id == 2):
                     #print(sst_batch)
 
                 sst_training_loss = train(sst_batch, device, model, "sst")
