@@ -120,6 +120,8 @@ class MultitaskBERT(nn.Module):
         self.sts_classifier = nn.Linear(config.hidden_size * 2, 1)
         self.dropout = nn.Dropout(0.1)
 
+        self.relational_classifier = nn.Linear(config.hidden_size * 2, config.hidden_size * 2)
+
     def forward(self, input_ids, token_type_ids, attention_mask, task_id):
         "Takes a batch of sentences and produces embeddings for them."
         # The final BERT embedding is the hidden state of [CLS] token (the first token)
@@ -139,11 +141,12 @@ class MultitaskBERT(nn.Module):
             input_ids, token_type_ids, attention_mask, self.task_ids["para"]
         )
 
-        output_1 = self.dropout(output)
-        output_2 = self.dropout(output)
-        output = torch.cat((output_1, output_2), dim=1)
+        output_drop = self.dropout(output)
+        output = torch.cat((output, output_drop), dim=1)
 
-        logits = self.sts_classifier(output).squeeze()
+        output = self.relational_classifier(output)
+
+        logits = self.para_classifier(output).squeeze()
 
         # we are using BCEWithLogitLoss, so no need to put sigmoid here
         return logits
@@ -241,10 +244,10 @@ class MultitaskBERT(nn.Module):
         # concatenate inputs and attention masks
         output = self.forward(input_ids, token_type_ids, attention_mask, self.task_ids["sts"])
 
-        output_1 = self.dropout(output)
-        output_2 = self.dropout(output)
-        output = torch.cat((output_1, output_2), dim=1)
+        output_drop = self.dropout(output)
+        output = torch.cat((output, output_drop), dim=1)
 
+        output = self.relational_classifier(output)
 
         logits = self.sts_classifier(output)
 
