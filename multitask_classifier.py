@@ -295,6 +295,7 @@ def train(batch, device, model, type):
         # expects un-normalised logits
         try:
             loss = nn.CrossEntropyLoss(reduction="mean")(logits, b_labels)
+            #print(loss)
         except NameError:
             print("ERROR: ", logits.shape, " ", b_labels.shape)
             return 0
@@ -624,7 +625,7 @@ def train_multitask(rank, world_size, args):
 
                 sst_training_loss = train(sst_batch, device, model, "sst")
 
-                if sst_train_loss == 0:
+                if sst_training_loss == 0:
                     continue
 
                 sst_train_loss += sst_training_loss.item()
