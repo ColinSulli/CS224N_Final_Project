@@ -355,7 +355,7 @@ def train(batch, device, model, type):
         #print("LABELS ", b_labels)
         loss = nn.MSELoss(reduction="mean")(logits, b_labels)
 
-    elif type == 'snli':
+    elif type == "snli":
         (
             token_ids,
             token_ids_1,
@@ -386,7 +386,7 @@ def train(batch, device, model, type):
         b_labels = b_labels.type(torch.float32).to(device)
         #b_labels = b_labels * 5
 
-        num = np.random.choice([0, 1])
+        #num = np.random.choice([0, 1])
 
         '''if False:
             ### STS ###
@@ -398,10 +398,10 @@ def train(batch, device, model, type):
             #if loss.numel() > 1:
             loss = nn.MSELoss(reduction="mean")(loss, b_labels)
         else:'''
-        mask_1 = b_labels == 2.5
-        mask_2 = b_labels == 5
-        b_labels[mask_1] = 0
-        b_labels[mask_2] = 1
+        #mask_1 = b_labels == 2.5
+        ##mask_2 = b_labels == 5
+        #b_labels[mask_1] = 0
+        #b_labels[mask_2] = 1
 
         #print(b_labels)
 
@@ -512,7 +512,7 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 600 * 3
         #probs = [10, 1, 1, .5]
         #probs = [283003, 8544, 1707, 6040, 8000]
-        #probs = [1, 1, 1, 1]
+        #probs = [0, 0, 1, 0, 0]
         probs = [50000, 8544, 1707, 6040, 8000]
 
 
