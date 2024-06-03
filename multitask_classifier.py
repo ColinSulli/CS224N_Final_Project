@@ -422,7 +422,7 @@ def train(batch, device, model, type):
     return loss
 
 def warmup_decay(current_step):
-    target_steps = 1800
+    target_steps = -3600
     # warmup to 1,800 steps
     if current_step < target_steps:
         return (current_step / target_steps)
@@ -534,8 +534,8 @@ def train_multitask(rank, world_size, args):
         probs = [100000, 8544, 1707, 6040, 2000]
 
 
-    epoch = 3
-    for epoch in range(args.epochs):
+    start_epoch = 3
+    for epoch in range(start_epoch, args.epochs):
         model.train()
 
         '''if epoch < 1:
