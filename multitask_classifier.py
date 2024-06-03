@@ -683,7 +683,7 @@ def train_multitask(rank, world_size, args):
                 raise Exception("invalid task_id")
 
             optimizer.step()
-            #lr_scheduler.step()
+            lr_scheduler.step()
 
         (
             sst_dev_acc,
