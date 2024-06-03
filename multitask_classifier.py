@@ -293,6 +293,10 @@ def train(batch, device, model, type):
         logits = model.predict_sentiment(b_ids, b_token_type_ids, b_mask)
         # logits dim: B, class_size. b_labels dim: B, (class indices)
         # expects un-normalised logits
+        if logits.shape[0] != b_labels.shape[0]:
+            print("DOESN'T MATCH: ", logits.shape, " ", b_labels.shape)
+            return 0
+
         try:
             loss = nn.CrossEntropyLoss(reduction="mean")(logits, b_labels)
             #print(loss)
