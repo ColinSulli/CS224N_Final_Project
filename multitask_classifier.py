@@ -498,16 +498,16 @@ def train_multitask(rank, world_size, args):
         model = DDP(model, device_ids=[rank])
 
     ### Load previous Crash Begin ###
-    #saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt')
+    saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt')
     # .46 one from today saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_14-31-27-full-model-10-2e-05-multitask.pt')
 
-    '''config = saved["model_config"]
+    config = saved["model_config"]
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
     model = MultitaskBERT(config)
     if args.use_gpu:
         model = nn.DataParallel(model)
     model.to(device)
-    model.load_state_dict(saved["model"])'''
+    model.load_state_dict(saved["model"])
 
 
     ### Load previous Crash End ###
@@ -545,7 +545,7 @@ def train_multitask(rank, world_size, args):
         probs = [283003, 8544, 1707, 6040, 8000]
 
 
-    start_epoch = 0
+    start_epoch = 1000
     for epoch in range(start_epoch, args.epochs):
         model.train()
 
