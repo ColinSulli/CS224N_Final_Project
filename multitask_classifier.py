@@ -416,7 +416,7 @@ def train(batch, device, model, type):
 
 def warmup_decay(current_step):
     target_steps = 1800
-    # warmup to 10,000 steps
+    # warmup to 1,800 steps
     if current_step < target_steps:
         return (current_step / target_steps)
     # decay after target steps:
@@ -485,7 +485,7 @@ def train_multitask(rank, world_size, args):
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.01)
-    #lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
+    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
     best_overall_accuracy = 0
 
     # cycle_sst_loader = itertools.cycle(sst_train_dataloader)
@@ -647,7 +647,7 @@ def train_multitask(rank, world_size, args):
                 raise Exception("invalid task_id")
 
             optimizer.step()
-            #lr_scheduler.step()
+            lr_scheduler.step()
 
         (
             sst_dev_acc,
