@@ -105,13 +105,13 @@ class MultitaskBERT(nn.Module):
         # Paraphrasing: Binary classification
         # we are concatenating the embeddings of the two sentences
         # and then passing them through a linear layer.
-        self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
+        self.para_classifier = nn.Linear(config.hidden_size, 1)
 
         # SST: 5 class classification
         # negative, somewhat negative, neutral, somewhat positive, or positive.
         # according to documentaiton of SST, there are 5 labels
         assert len(config.sentiment_labels) == 5
-        self.sst_classifier = nn.Linear(config.hidden_size * 2, 5)
+        self.sst_classifier = nn.Linear(config.hidden_size, 5)
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
@@ -138,9 +138,9 @@ class MultitaskBERT(nn.Module):
             input_ids, token_type_ids, attention_mask, self.task_ids["para"]
         )
 
-        output_1 = self.dropout(output)
+        '''output_1 = self.dropout(output)
         output_2 = self.dropout(output)
-        output = torch.cat((output_1, output_2), dim=1)
+        output = torch.cat((output_1, output_2), dim=1)'''
 
         logits = self.para_classifier(output).squeeze()
 
@@ -161,12 +161,6 @@ class MultitaskBERT(nn.Module):
             attention_mask,
             task_id=self.task_ids["sst"],
         )
-
-        pooler_output_1 = self.dropout(pooler_output)
-        pooler_output_2 = self.dropout(pooler_output)
-
-        pooler_output = torch.cat((pooler_output_1, pooler_output_2), dim=1)
-
         logits = self.sst_classifier(pooler_output).squeeze()
 
         # we are using CrossEntropyLoss, so no need to put softmax here
@@ -514,8 +508,8 @@ def train_multitask(rank, world_size, args):
 def test_multitask(args):
     """Test and save predictions on the dev and test sets of all three tasks."""
     with torch.no_grad():
-        saved = torch.load(args.filepath)
-        #saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-05-28_02-46-57-full-model-5-1e-05-multitask.pt')
+        #saved = torch.load(args.filepath)
+        saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-05-28_05-41-06-full-model-5-1e-05-multitask.pt')
 
         config = saved["model_config"]
 
