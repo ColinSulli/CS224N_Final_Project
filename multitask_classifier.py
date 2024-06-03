@@ -534,7 +534,7 @@ def train_multitask(rank, world_size, args):
         probs = [100000, 8544, 1707, 6040, 2000]
 
 
-
+    epoch = 3
     for epoch in range(args.epochs):
         model.train()
 
