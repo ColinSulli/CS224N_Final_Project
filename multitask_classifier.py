@@ -509,8 +509,7 @@ def test_multitask(args):
     """Test and save predictions on the dev and test sets of all three tasks."""
     with torch.no_grad():
         saved = torch.load(args.filepath)
-        #saved = torch.load(
-            '/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-05-28_02-46-57-full-model-5-1e-05-multitask.pt')
+        #saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-05-28_02-46-57-full-model-5-1e-05-multitask.pt')
 
         config = saved["model_config"]
 
