@@ -111,7 +111,7 @@ class MultitaskBERT(nn.Module):
         # negative, somewhat negative, neutral, somewhat positive, or positive.
         # according to documentaiton of SST, there are 5 labels
         assert len(config.sentiment_labels) == 5
-        self.sst_classifier = nn.Linear(config.hidden_size, 5)
+        self.sst_classifier = nn.Linear(config.hidden_size * 2, 5)
 
         # SST: regression between 0 and 6
         # with 0 being the least similar and 5 being the most similar.
@@ -161,6 +161,12 @@ class MultitaskBERT(nn.Module):
             attention_mask,
             task_id=self.task_ids["sst"],
         )
+
+        pooler_output_1 = self.dropout(pooler_output)
+        pooler_output_2 = self.dropout(pooler_output)
+
+        pooler_output = torch.cat((pooler_output_1, pooler_output_2), dim=1)
+
         logits = self.sst_classifier(pooler_output).squeeze()
 
         # we are using CrossEntropyLoss, so no need to put softmax here
