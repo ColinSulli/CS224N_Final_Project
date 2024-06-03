@@ -506,7 +506,7 @@ def train_multitask(rank, world_size, args):
     model.to(device)
     model.load_state_dict(saved["model"])
 
-    for param in self.bert.parameters():
+    for param in model.bert.parameters():
         param.requires_grad = False
     ### Load previous Crash End ###
 
