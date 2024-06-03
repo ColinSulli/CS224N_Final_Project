@@ -495,8 +495,8 @@ def train_multitask(rank, world_size, args):
         model = DDP(model, device_ids=[rank])
 
     ### Load previous Crash Begin ###
-    #this one is 5 batch, from yesterdaysaved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt')
-    saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_14-31-27-full-model-10-2e-05-multitask.pt')
+    saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt')
+    # .46 one from today saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_14-31-27-full-model-10-2e-05-multitask.pt')
 
     config = saved["model_config"]
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
@@ -542,7 +542,7 @@ def train_multitask(rank, world_size, args):
         probs = [100000, 8544, 1707, 6040, 2000]
 
 
-    start_epoch = 0
+    start_epoch = 20
     for epoch in range(start_epoch, args.epochs):
         model.train()
 
@@ -732,7 +732,10 @@ def train_multitask(rank, world_size, args):
 def test_multitask(args):
     """Test and save predictions on the dev and test sets of all three tasks."""
     with torch.no_grad():
-        saved = torch.load(args.filepath)
+        #saved = torch.load(args.filepath)
+        saved = torch.load(
+            '/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt')
+
         config = saved["model_config"]
 
         device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
