@@ -62,7 +62,7 @@ def data_loaders_for_train_and_validation(args, rank, world_size, use_multi_gpu=
     # format: name, data, batch_size, shuffle
     datasets = [
         ("sst_train", sst_train_data, args.batch_size, True),
-        ("imdb_train", imdb_train_data, 2, True),
+        ("imdb_train", imdb_train_data, 5, True),
         ("sst_dev", sst_dev_data, args.batch_size, False),
         ("para_train", para_train_data, args.batch_size, True),
         ("para_dev", para_dev_data, args.batch_size, False),

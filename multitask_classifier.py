@@ -495,7 +495,9 @@ def train_multitask(rank, world_size, args):
         model = DDP(model, device_ids=[rank])
 
     ### Load previous Crash Begin ###
-    saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt')
+    #this one is 5 batch, from yesterdaysaved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt')
+    saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_14-31-27-full-model-10-2e-05-multitask.pt')
+
     config = saved["model_config"]
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
     model = MultitaskBERT(config)
@@ -507,7 +509,7 @@ def train_multitask(rank, world_size, args):
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.01)
-    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
+    #lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
     best_overall_accuracy = 0
 
     # cycle_sst_loader = itertools.cycle(sst_train_dataloader)
@@ -538,7 +540,7 @@ def train_multitask(rank, world_size, args):
         probs = [100000, 8544, 1707, 6040, 2000]
 
 
-    start_epoch = 3
+    start_epoch = 0
     for epoch in range(start_epoch, args.epochs):
         model.train()
 
@@ -673,7 +675,7 @@ def train_multitask(rank, world_size, args):
                 raise Exception("invalid task_id")
 
             optimizer.step()
-            lr_scheduler.step()
+            #lr_scheduler.step()
 
         (
             sst_dev_acc,
