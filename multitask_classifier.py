@@ -375,7 +375,7 @@ def train_multitask(rank, world_size, args):
         probs = [283003, 8544, 6040]
 
     ### Load previous Crash Begin ###
-    saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-05-28_06-02-55-full-model-5-2e-05-multitask.pt')
+    saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-05-28_05-41-06-full-model-5-1e-05-multitask.pt')
         # .46 one from today saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_14-31-27-full-model-10-2e-05-multitask.pt')
     config = saved["model_config"]
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
