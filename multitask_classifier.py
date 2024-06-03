@@ -485,6 +485,7 @@ def train_multitask(rank, world_size, args):
     config = SimpleNamespace(**config)
 
     model = MultitaskBERT(config)
+    model = model.load_state_dict(torch.load('2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt'))
     model = model.to(device)
 
     if world_size > 0:
@@ -719,7 +720,7 @@ def test_multitask(args):
         device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
 
         model = MultitaskBERT(config)
-        model = model.load_state_dict(torch.load('2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt'))
+        #model = model.load_state_dict(torch.load('2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt'))
 
         if args.use_gpu:
             model = nn.DataParallel(model)
