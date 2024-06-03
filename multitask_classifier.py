@@ -505,6 +505,9 @@ def train_multitask(rank, world_size, args):
         model = nn.DataParallel(model)
     model.to(device)
     model.load_state_dict(saved["model"])
+
+    for param in self.bert.parameters():
+        param.requires_grad = False
     ### Load previous Crash End ###
 
     lr = args.lr
@@ -533,7 +536,7 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [0, 0, 0, 1]
     else:
-        steps_per_epoch = 600 * 3
+        steps_per_epoch = 600 #* 3
         #probs = [10, 1, 1, .5]
         #probs = [283003, 8544, 1707, 6040, 8000]
         #probs = [0, 0, 1, 0, 0]

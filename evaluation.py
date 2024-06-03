@@ -214,21 +214,21 @@ def model_eval_test_multitask(sentiment_dataloader,
         for step, batch in enumerate(tqdm(sts_dataloader, desc=f'sts test eval', disable=TQDM_DISABLE)):
             (
                 token_ids,
-                token_ids_1,
-                token_ids_2,
+                #token_ids_1,
+                #token_ids_2,
                 token_type_ids,
                 attention_mask,
-                attention_mask_1,
-                attention_mask_2,
+                #attention_mask_1,
+                #attention_mask_2,
                 b_labels,
             ) = (
                 batch["token_ids"],
-                batch["token_ids_1"],
-                batch["token_ids_2"],
+                #batch["token_ids_1"],
+                #batch["token_ids_2"],
                 batch["token_type_ids"],
                 batch["attention_mask"],
-                batch["attention_mask_1"],
-                batch["attention_mask_2"],
+                #batch["attention_mask_1"],
+                #batch["attention_mask_2"],
                 batch["labels"],
             )
 
@@ -241,7 +241,7 @@ def model_eval_test_multitask(sentiment_dataloader,
             attention_mask_2 = attention_mask_2.to(device)
             b_labels = b_labels.type(torch.float32).to(device)
             
-            logits = model.predict_similarity(token_ids, token_ids_1, token_ids_2, token_type_ids, attention_mask, attention_mask_1, attention_mask_2)
+            logits = model.predict_similarity(token_ids, None, None, token_type_ids, attention_mask, None, None)
             y_hat = logits.flatten().cpu().numpy()
 
             sts_y_pred.extend(y_hat)
