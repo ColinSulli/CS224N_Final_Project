@@ -374,7 +374,20 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 600 * 3
         probs = [283003, 8544, 6040]
 
-    for epoch in range(args.epochs):
+    ### Load previous Crash Begin ###
+    saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_21-20-14-full-model-3-1e-05-multitask.pt')
+        # .46 one from today saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_14-31-27-full-model-10-2e-05-multitask.pt')
+    config = saved["model_config"]
+    device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
+    model = MultitaskBERT(config)
+    if args.use_gpu:
+        model = nn.DataParallel(model)
+    model.to(device)
+    model.load_state_dict(saved["model"])
+
+
+    start_epoch = 100
+    for epoch in range(start_epoch, args.epochs):
         model.train()
 
         # annealed sampling
