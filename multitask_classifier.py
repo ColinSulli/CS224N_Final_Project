@@ -291,10 +291,13 @@ def train(batch, device, model, type):
         b_mask = b_mask.to(device)
         b_labels = b_labels.to(device)
         logits = model.predict_sentiment(b_ids, b_token_type_ids, b_mask)
-
         # logits dim: B, class_size. b_labels dim: B, (class indices)
         # expects un-normalised logits
-        loss = nn.CrossEntropyLoss(reduction="mean")(logits, b_labels)
+        try:
+            loss = nn.CrossEntropyLoss(reduction="mean")(logits, b_labels)
+        except NameError:
+            print("ERROR: ", logits.shape, " ", b_labels.shape)
+            return 0
 
     elif type == "para":
         (
@@ -620,6 +623,10 @@ def train_multitask(rank, world_size, args):
                 #    print(sst_batch)
 
                 sst_training_loss = train(sst_batch, device, model, "sst")
+
+                if sst_train_loss == 0:
+                    continue
+
                 sst_train_loss += sst_training_loss.item()
                 sst_num_batches += 1
 
