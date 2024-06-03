@@ -490,7 +490,16 @@ def train_multitask(rank, world_size, args):
     if world_size > 0:
         model = DDP(model, device_ids=[rank])
 
-    model.load_state_dict(torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt'))
+    ### Load previous Crash Begin ###
+    saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_04-33-35-full-model-10-2e-05-multitask.pt')
+    config = saved["model_config"]
+    device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
+    model = MultitaskBERT(config)
+    if args.use_gpu:
+        model = nn.DataParallel(model)
+    model.to(device)
+    model.load_state_dict(saved["model"])
+    ### Load previous Crash End ###
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.01)
