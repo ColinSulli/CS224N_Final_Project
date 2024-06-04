@@ -455,7 +455,7 @@ def train_multitask(rank, world_size, args):
         device = torch.device("cpu")
 
     if rank == 0:
-        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-pal-cse-weightdecay-hyperparams-relational_layer"
+        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-everything"
         summary_writer = SummaryWriter(f"runs/{run_name}")
         p_print(f"\n\n\n*** Train multitask {run_name} ***")
         p_print("device: {}, debug: {}".format(device, DEBUG))
