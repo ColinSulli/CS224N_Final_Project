@@ -429,7 +429,7 @@ def train(batch, device, model, type):
     return loss
 
 def warmup_decay(current_step):
-    target_steps = 1000
+    target_steps = 100
     # warmup to 1,800 steps
     if current_step < target_steps:
         return (current_step / target_steps)
