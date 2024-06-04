@@ -429,14 +429,14 @@ def train(batch, device, model, type):
     return loss
 
 def warmup_decay(current_step):
-    target_steps = 100
+    target_steps = 1000
     # warmup to 1,800 steps
     if current_step < target_steps:
         return (current_step / target_steps)
     # decay after target steps:
     else:
         # 5 epochs, 2400 steps
-        total_train_steps = 1 * 1000
+        total_train_steps = 5 * 1000
         return max(0.0, float(total_train_steps - current_step) / float(max(1, total_train_steps - target_steps)))
 
 def train_multitask(rank, world_size, args):
@@ -498,7 +498,7 @@ def train_multitask(rank, world_size, args):
         model = DDP(model, device_ids=[rank])
 
     ### Load previous Crash Begin ###
-    saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_23-39-17-full-model-5-2e-05-multitask.pt')
+    '''saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_23-39-17-full-model-5-2e-05-multitask.pt')
     # .46 one from today saved = torch.load('/home/cmsstanfordhw/Final_Project/CS224N_Final_Project/2024-06-03_14-31-27-full-model-10-2e-05-multitask.pt')
 
     config = saved["model_config"]
@@ -507,7 +507,7 @@ def train_multitask(rank, world_size, args):
     if args.use_gpu:
         model = nn.DataParallel(model)
     model.to(device)
-    model.load_state_dict(saved["model"])
+    model.load_state_dict(saved["model"])'''
 
 
     ### Load previous Crash End ###
@@ -545,7 +545,7 @@ def train_multitask(rank, world_size, args):
         #probs = [1, 1, 1, 1, 1]
 
 
-    start_epoch = 1000
+    start_epoch = 0
     for epoch in range(start_epoch, args.epochs):
         model.train()
 
@@ -719,8 +719,8 @@ def train_multitask(rank, world_size, args):
                 p_print(
                     f"Saving model at epoch {epoch}, previous accuracy: {best_overall_accuracy}, new accuracy: {overall_accuracy}"
                 )
-                save_model(model, optimizer, args, config, args.filepath)
-                best_overall_accuracy = overall_accuracy
+            save_model(model, optimizer, args, config, args.filepath)
+            best_overall_accuracy = overall_accuracy
 
         # while debgging, we may not encounter batches, so avoid division by 0
         sts_train_loss = sts_train_loss / (sts_num_batches + 1e-9)
