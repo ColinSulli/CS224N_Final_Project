@@ -514,7 +514,7 @@ def train_multitask(rank, world_size, args):
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.01)
-    #lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
+    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
     best_overall_accuracy = 0
 
     # cycle_sst_loader = itertools.cycle(sst_train_dataloader)
@@ -538,14 +538,14 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [0, 0, 0, 1]
     else:
-        steps_per_epoch = 50
+        steps_per_epoch = 1000
         #probs = [10, 1, 1, .5]
-        probs = [0, 1, 1, 0, 0]
+        probs = [50000, 8544, 0, 6040, 0]
         #probs = [0, 0, 1, 0, 0]
         #probs = [1, 1, 1, 1, 1]
 
 
-    start_epoch = 1
+    start_epoch = 1000
     for epoch in range(start_epoch, args.epochs):
         model.train()
 
@@ -683,7 +683,7 @@ def train_multitask(rank, world_size, args):
                 raise Exception("invalid task_id")
 
             optimizer.step()
-            #lr_scheduler.step()
+            lr_scheduler.step()
 
         (
             sst_dev_acc,
