@@ -540,7 +540,7 @@ def train_multitask(rank, world_size, args):
     else:
         steps_per_epoch = 1000
         #probs = [10, 1, 1, .5]
-        probs = [50000, 8544, 0, 6040, 0]
+        probs = [1, 1, 1, 1, 1]
         #probs = [0, 0, 1, 0, 0]
         #probs = [1, 1, 1, 1, 1]
 
