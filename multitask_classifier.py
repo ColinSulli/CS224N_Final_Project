@@ -429,14 +429,14 @@ def train(batch, device, model, type):
     return loss
 
 def warmup_decay(current_step):
-    target_steps = 2400
+    target_steps = 300
     # warmup to 1,800 steps
     if current_step < target_steps:
         return (current_step / target_steps)
     # decay after target steps:
     else:
         # 5 epochs, 2400 steps
-        total_train_steps = 10 * 2400
+        total_train_steps = 5 * 600
         return max(0.0, float(total_train_steps - current_step) / float(max(1, total_train_steps - target_steps)))
 
 def train_multitask(rank, world_size, args):
@@ -538,7 +538,7 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [0, 0, 0, 1]
     else:
-        steps_per_epoch = 2400
+        steps_per_epoch = 600
         #probs = [10, 1, 1, .5]
         probs = [283003, 8544, 1707, 6040, 550152]
         #probs = [0, 0, 1, 0, 0]
