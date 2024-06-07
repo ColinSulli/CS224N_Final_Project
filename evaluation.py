@@ -233,12 +233,12 @@ def model_eval_test_multitask(sentiment_dataloader,
             )
 
             token_ids = token_ids.to(device)
-            token_ids_1 = token_ids_1.to(device)
-            token_ids_2 = token_ids_2.to(device)
+            #token_ids_1 = token_ids_1.to(device)
+            #token_ids_2 = token_ids_2.to(device)
             token_type_ids = token_type_ids.to(device)
             attention_mask = attention_mask.to(device)
-            attention_mask_1 = attention_mask_1.to(device)
-            attention_mask_2 = attention_mask_2.to(device)
+            #attention_mask_1 = attention_mask_1.to(device)
+            #attention_mask_2 = attention_mask_2.to(device)
             b_sent_ids = b_labels.type(torch.float32).to(device)
             
             logits = model.predict_similarity(token_ids, None, None, token_type_ids, attention_mask, None, None)
