@@ -107,7 +107,7 @@ class MultitaskBERT(nn.Module):
         # Paraphrasing: Binary classification
         # we are concatenating the embeddings of the two sentences
         # and then passing them through a linear layer.
-        self.para_classifier = nn.Linear(config.hidden_size, 1)
+        self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
 
         # SST: 5 class classification
         # negative, somewhat negative, neutral, somewhat positive, or positive.
@@ -141,11 +141,11 @@ class MultitaskBERT(nn.Module):
             input_ids, token_type_ids, attention_mask, self.task_ids["para"]
         )
 
-        #output_1 = self.dropout(output)
-        #output_2 = self.dropout(output)
-        #output = torch.cat((output_1, output_2), dim=1)
+        output_1 = self.dropout(output)
+        output_2 = self.dropout(output)
+        output = torch.cat((output_1, output_2), dim=1)
 
-        #output = self.relational_classifier(output)
+        output = self.relational_classifier(output)
 
         logits = self.para_classifier(output).squeeze()
 
@@ -250,7 +250,7 @@ class MultitaskBERT(nn.Module):
 
         output = torch.cat((output_1, output_2), dim=1)
 
-        #output = self.relational_classifier(output)
+        output = self.relational_classifier(output)
 
         logits = self.sts_classifier(output)
 
@@ -455,7 +455,7 @@ def train_multitask(rank, world_size, args):
         device = torch.device("cpu")
 
     if rank == 0:
-        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-everything"
+        run_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-pal_annealed_CSE_finetuning_warmup_relational"
         summary_writer = SummaryWriter(f"runs/{run_name}")
         p_print(f"\n\n\n*** Train multitask {run_name} ***")
         p_print("device: {}, debug: {}".format(device, DEBUG))
@@ -899,7 +899,7 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
-    args.filepath = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-{args.fine_tune_mode}-{args.epochs}-{args.lr}-pal_annealed_CSE_finetuning_warmup.pt"  # Save path.
+    args.filepath = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-{args.fine_tune_mode}-{args.epochs}-{args.lr}-pal_annealed_CSE_finetuning_warmup_relational.pt"  # Save path.
     seed_everything(args.seed)  # Fix the seed for reproducibility.
 
     # If CUDA is available, use it.
