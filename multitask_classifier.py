@@ -107,7 +107,7 @@ class MultitaskBERT(nn.Module):
         # Paraphrasing: Binary classification
         # we are concatenating the embeddings of the two sentences
         # and then passing them through a linear layer.
-        self.para_classifier = nn.Linear(config.hidden_size * 2, 1)
+        self.para_classifier = nn.Linear(config.hidden_size, 1)
 
         # SST: 5 class classification
         # negative, somewhat negative, neutral, somewhat positive, or positive.
@@ -141,11 +141,11 @@ class MultitaskBERT(nn.Module):
             input_ids, token_type_ids, attention_mask, self.task_ids["para"]
         )
 
-        output_1 = self.dropout(output)
-        output_2 = self.dropout(output)
-        output = torch.cat((output_1, output_2), dim=1)
+        #output_1 = self.dropout(output)
+        #output_2 = self.dropout(output)
+        #output = torch.cat((output_1, output_2), dim=1)
 
-        output = self.relational_classifier(output)
+        #output = self.relational_classifier(output)
 
         logits = self.para_classifier(output).squeeze()
 
@@ -250,7 +250,7 @@ class MultitaskBERT(nn.Module):
 
         output = torch.cat((output_1, output_2), dim=1)
 
-        output = self.relational_classifier(output)
+        #output = self.relational_classifier(output)
 
         logits = self.sts_classifier(output)
 
@@ -514,7 +514,7 @@ def train_multitask(rank, world_size, args):
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.01)
-    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
+    #lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
     best_overall_accuracy = 0
 
     # cycle_sst_loader = itertools.cycle(sst_train_dataloader)
@@ -538,9 +538,9 @@ def train_multitask(rank, world_size, args):
         steps_per_epoch = 10
         probs = [0, 0, 0, 1]
     else:
-        steps_per_epoch = 600
+        steps_per_epoch = 600 * 3
         #probs = [10, 1, 1, .5]
-        probs = [283003, 8544, 1707, 6040, 550152]
+        probs = [283003, 8544, 1707, 6040, 50000]
         #probs = [0, 0, 1, 0, 0]
         #probs = [1, 1, 1, 1, 1]
 
@@ -684,7 +684,7 @@ def train_multitask(rank, world_size, args):
                 raise Exception("invalid task_id")
 
             optimizer.step()
-            lr_scheduler.step()
+            #lr_scheduler.step()
 
         (
             sst_dev_acc,
