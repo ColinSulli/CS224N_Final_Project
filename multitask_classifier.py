@@ -429,7 +429,7 @@ def train(batch, device, model, type):
     return loss
 
 def warmup_decay(current_step):
-    target_steps = 300
+    target_steps = 540
     # warmup to 1,800 steps
     if current_step < target_steps:
         return (current_step / target_steps)
@@ -514,7 +514,7 @@ def train_multitask(rank, world_size, args):
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.01)
-    #lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
+    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_decay)
     best_overall_accuracy = 0
 
     # cycle_sst_loader = itertools.cycle(sst_train_dataloader)
@@ -684,7 +684,7 @@ def train_multitask(rank, world_size, args):
                 raise Exception("invalid task_id")
 
             optimizer.step()
-            #lr_scheduler.step()
+            lr_scheduler.step()
 
         (
             sst_dev_acc,
@@ -899,7 +899,7 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
-    args.filepath = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-{args.fine_tune_mode}-{args.epochs}-{args.lr}-pal_annealed_CSE_finetuning.pt"  # Save path.
+    args.filepath = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-{args.fine_tune_mode}-{args.epochs}-{args.lr}-pal_annealed_CSE_finetuning_warmup.pt"  # Save path.
     seed_everything(args.seed)  # Fix the seed for reproducibility.
 
     # If CUDA is available, use it.
